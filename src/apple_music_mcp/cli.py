@@ -13,11 +13,12 @@ import httpx
 
 from .api import MusicAPI
 from .auth import Credentials, MusicError, login_server
+from .clients import add_commands, list_clients, show_config
 from .native import NativeMusic
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Apple Music library and playlist MCP for Hermes")
+    parser = argparse.ArgumentParser(description="Apple Music library and playlist MCP server")
     commands = parser.add_subparsers(dest="command")
     commands.add_parser("serve", help="Run the FastMCP server over stdio")
     login_parser = commands.add_parser("login", help="Sign in directly on Apple's music website")
@@ -37,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--native", action="store_true", help="Also check Music.app automation access"
     )
     commands.add_parser("logout", help="Remove this server's locally stored music access token")
+    add_commands(commands)
     return parser
 
 
@@ -104,6 +106,8 @@ COMMANDS: dict[str | None, Callable] = {
     "login": login,
     "status": status,
     "logout": logout,
+    "clients": list_clients,
+    "config": show_config,
 }
 
 

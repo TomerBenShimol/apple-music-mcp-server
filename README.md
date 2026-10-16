@@ -1,11 +1,11 @@
 # Apple Music MCP Server
 
-Manage Apple Music from Hermes, ChatGPT, or another MCP client using **Python**
+Manage Apple Music from Claude, Codex, Gemini CLI, ChatGPT, or another MCP client using **Python**
 and **FastMCP 3**. Search the catalog and your library, add or remove songs, and
 create, edit, copy, and organize playlists through 17 tools.
 
-The server runs locally over **stdio**. Hermes launches it directly; ChatGPT
-connects through OpenAI's private Secure MCP Tunnel.
+The server runs locally over **stdio**. Desktop and CLI clients launch it directly;
+the existing ChatGPT cloud connection uses OpenAI's private Secure MCP Tunnel.
 
 ## Requirements
 
@@ -73,7 +73,24 @@ Allow the calling app to control Music when macOS requests it. Music must be sig
 in and its library available. Access is managed under **System Settings → Privacy
 & Security → Automation**.
 
-## Connect to Hermes
+## Connect to local MCP clients
+
+Generate configuration for Claude Code, Claude Desktop, Codex, Gemini CLI, Cursor,
+VS Code, or another stdio MCP client using the Python environment where you installed
+this package:
+
+```bash
+.venv/bin/apple-music-mcp clients
+.venv/bin/apple-music-mcp config claude-code
+.venv/bin/apple-music-mcp config codex
+.venv/bin/apple-music-mcp config gemini-cli
+```
+
+The command prints JSON (TOML for Codex), with an absolute Python path and a shared
+credential directory. It does not change client settings or export tokens.
+See [local client setup](docs/clients.md) for all targets and configuration locations.
+
+## Hermes example
 
 Use the absolute path to your checkout's Python executable in Hermes's MCP config:
 
