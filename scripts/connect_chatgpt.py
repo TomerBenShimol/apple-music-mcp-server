@@ -17,8 +17,8 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
 CLIENT = PROJECT / ".chatgpt" / "tunnel-client"
-RUNTIME = Path.home() / ".local/share/tomer-apple-music-mcp"
-PROFILE_DIR = Path.home() / ".config/tomer-apple-music-mcp/chatgpt-profiles"
+RUNTIME = Path.home() / ".local/share/apple-music-mcp"
+PROFILE_DIR = Path.home() / ".config/apple-music-mcp/chatgpt-profiles"
 PROFILE = "apple-music-chatgpt"
 TUNNEL_ID = re.compile(r"tunnel_[A-Za-z0-9_-]+\Z")
 

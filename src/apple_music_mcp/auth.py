@@ -32,9 +32,7 @@ USER_TOKEN_ENV = "APPLE_MUSIC_USER_TOKEN"
 
 
 def data_dir() -> Path:
-    return Path(
-        os.environ.get("APPLE_MUSIC_MCP_HOME", "~/.config/tomer-apple-music-mcp")
-    ).expanduser()
+    return Path(os.environ.get("APPLE_MUSIC_MCP_HOME", "~/.config/apple-music-mcp")).expanduser()
 
 
 def private_json(path: Path, value: dict) -> None:
@@ -189,7 +187,7 @@ def login_server(credentials: Credentials, developer_token: str) -> tuple[HTTPSe
     settings = json.dumps(
         {
             "developerToken": developer_token,
-            "app": {"name": "Tomer's Apple Music MCP", "build": "0.1.0"},
+            "app": {"name": "Apple Music MCP", "build": "0.1.0"},
         }
     )
     html = """<!doctype html><html lang="en"><meta charset="utf-8">

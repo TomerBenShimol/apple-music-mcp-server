@@ -26,19 +26,19 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-LABEL = "local.tomer.apple-music-chatgpt"
-SERVICE = "Tomer Apple Music — OpenAI tunnel"
-ROOT = Path.home() / ".local/share/tomer-apple-music-mcp"
+LABEL = "local.apple-music-chatgpt"
+SERVICE = "Apple Music — OpenAI tunnel"
+ROOT = Path.home() / ".local/share/apple-music-mcp"
 HERE = ROOT / "chatgpt"
 CLIENT = HERE / "tunnel-client"
 PYTHON = ROOT / ".venv/bin/python"
-CONFIG_DIR = Path.home() / ".config/tomer-apple-music-mcp/chatgpt-profiles"
+CONFIG_DIR = Path.home() / ".config/apple-music-mcp/chatgpt-profiles"
 PROFILE = "apple-music-background"
 PROFILE_FILE = CONFIG_DIR / (PROFILE + ".yaml")
 FOREGROUND_PROFILE_FILE = CONFIG_DIR / "apple-music-chatgpt.yaml"
 ITEM_NOT_FOUND = -25300
 PLIST = Path.home() / "Library/LaunchAgents" / (LABEL + ".plist")
-LOGS = Path.home() / ".local/state/tomer-apple-music-mcp"
+LOGS = Path.home() / ".local/state/apple-music-mcp"
 PORT = 61356
 DOMAIN = f"gui/{os.getuid()}"
 TARGET = f"{DOMAIN}/{LABEL}"

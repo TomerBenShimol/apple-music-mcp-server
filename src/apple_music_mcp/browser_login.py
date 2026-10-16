@@ -77,7 +77,7 @@ def browser_login(
     except ImportError as exc:
         raise MusicError(
             "Web sign-in needs the optional browser helper. Install "
-            "`tomer-apple-music-mcp[browser]`; if Chrome is not installed, "
+            "`apple-music-mcp[browser]`; if Chrome is not installed, "
             "also run `playwright install chromium`."
         ) from exc
 

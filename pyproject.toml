@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tomer-apple-music-mcp"
+name = "apple-music-mcp"
 version = "0.1.0"
 description = "Apple Music library and playlist MCP server built with Python and FastMCP"
 requires-python = ">=3.11"

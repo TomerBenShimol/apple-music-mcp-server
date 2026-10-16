@@ -21,9 +21,9 @@ when Apple changes its player. This project is an independent integration.
 
 ## Install
 
+Clone this repository and open its directory, then run:
+
 ```bash
-git clone https://github.com/TomerBenShimol/apple-music-mcp-server.git
-cd apple-music-mcp-server
 python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[browser]'
 ```
@@ -50,9 +50,14 @@ Complete Apple's sign-in and verification in the browser. The helper verifies
 library access before saving the music token. Passwords and verification codes
 stay in Apple's sign-in flow. Its temporary browser profile is deleted afterward.
 
-The saved token is stored in `~/.config/tomer-apple-music-mcp/credentials.json`,
+The saved token is stored in `~/.config/apple-music-mcp/credentials.json`,
 with private file permissions. Set `APPLE_MUSIC_MCP_HOME` to use another directory.
 Do not commit that directory or any tokens.
+
+If upgrading from an installation that used a different credential directory,
+set `APPLE_MUSIC_MCP_HOME` to that existing directory before starting the server,
+or sign in again. Recreate tunnel profiles and reinstall the background service
+when moving to the generic runtime paths and service identifiers below.
 
 An MCP client can also call `connect_apple_music`. It returns immediately while
 `get_status` reports sign-in progress. Keep its server alive until sign-in finishes.
@@ -132,15 +137,15 @@ to reach the local stdio server without exposing a public endpoint. The local
    organization/workspace. Review the access before connecting.
 
 `scripts/connect_chatgpt.py` targets an installed runtime at
-`~/.local/share/tomer-apple-music-mcp/.venv` and the official client at
+`~/.local/share/apple-music-mcp/.venv` and the official client at
 `.chatgpt/tunnel-client` in this checkout. Install the package at that runtime
 path first to use the helper:
 
 ```bash
-python3 -m venv ~/.local/share/tomer-apple-music-mcp/.venv
-~/.local/share/tomer-apple-music-mcp/.venv/bin/python -m pip install '.[browser]'
+python3 -m venv ~/.local/share/apple-music-mcp/.venv
+~/.local/share/apple-music-mcp/.venv/bin/python -m pip install '.[browser]'
 # Place the verified official client at .chatgpt/tunnel-client first.
-~/.local/share/tomer-apple-music-mcp/.venv/bin/python scripts/connect_chatgpt.py
+~/.local/share/apple-music-mcp/.venv/bin/python scripts/connect_chatgpt.py
 ```
 
 It asks for the tunnel ID and key locally. The foreground helper does not save

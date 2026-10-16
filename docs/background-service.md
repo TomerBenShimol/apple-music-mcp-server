@@ -6,10 +6,10 @@ and restarts after failures. It does not keep a Terminal window open.
 
 ## Prerequisites
 
-- The package installed at `~/.local/share/tomer-apple-music-mcp/.venv`.
+- The package installed at `~/.local/share/apple-music-mcp/.venv`.
 - A verified official tunnel client, originally placed at `.chatgpt/tunnel-client`.
 - A tunnel profile created by `scripts/connect_chatgpt.py`:
-  `~/.config/tomer-apple-music-mcp/chatgpt-profiles/apple-music-chatgpt.yaml`.
+  `~/.config/apple-music-mcp/chatgpt-profiles/apple-music-chatgpt.yaml`.
 - Your existing tunnel runtime key. Enter it only in the local setup prompt.
 
 This preparation copies the helper and vendor client outside Desktop/iCloud,
@@ -22,7 +22,7 @@ import json
 import shutil
 from pathlib import Path
 
-runtime = Path.home() / '.local/share/tomer-apple-music-mcp'
+runtime = Path.home() / '.local/share/apple-music-mcp'
 helper = runtime / 'chatgpt'
 helper.mkdir(parents=True, exist_ok=True, mode=0o700)
 helper.chmod(0o700)
@@ -32,7 +32,7 @@ for source, destination in [
 ]:
     shutil.copyfile(source, destination)
     destination.chmod(0o700)
-profiles = Path.home() / '.config/tomer-apple-music-mcp/chatgpt-profiles'
+profiles = Path.home() / '.config/apple-music-mcp/chatgpt-profiles'
 settings = json.loads((profiles / 'apple-music-chatgpt.yaml').read_text())
 settings['health'] = {'listen_addr': '127.0.0.1:61356'}
 profile = profiles / 'apple-music-background.yaml'
@@ -40,8 +40,8 @@ profile.touch(mode=0o600, exist_ok=True)
 profile.chmod(0o600)
 profile.write_text(json.dumps(settings, indent=2))
 PY
-~/.local/share/tomer-apple-music-mcp/.venv/bin/python \
-  ~/.local/share/tomer-apple-music-mcp/chatgpt/chatgpt_service.py install
+~/.local/share/apple-music-mcp/.venv/bin/python \
+  ~/.local/share/apple-music-mcp/chatgpt/chatgpt_service.py install
 ```
 
 The installer asks for the key privately, saves and verifies it in Keychain,
@@ -65,14 +65,14 @@ Use the installed Python and helper paths above with these actions:
 | `install` | Save a replacement key and reinstall/restart the service |
 
 To disable automatic startup permanently, stop the service and remove
-`~/Library/LaunchAgents/local.tomer.apple-music-chatgpt.plist`.
+`~/Library/LaunchAgents/local.apple-music-chatgpt.plist`.
 This does not change Hermes or disconnect the ChatGPT plugin.
 
 ## Storage and boundaries
 
-- LaunchAgent: `~/Library/LaunchAgents/local.tomer.apple-music-chatgpt.plist`.
-- Keychain service: `Tomer Apple Music — OpenAI tunnel`; account: the tunnel ID.
-- Operational logs: `~/.local/state/tomer-apple-music-mcp/` with private permissions.
+- LaunchAgent: `~/Library/LaunchAgents/local.apple-music-chatgpt.plist`.
+- Keychain service: `Apple Music — OpenAI tunnel`; account: the tunnel ID.
+- Operational logs: `~/.local/state/apple-music-mcp/` with private permissions.
 - Health address: `127.0.0.1:61356` only.
 - Runtime keys are not stored in source, command arguments, logs, or the plist.
 - Raw HTTP logging and remote admin access are disabled.
