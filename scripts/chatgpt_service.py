@@ -21,7 +21,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 LABEL = "local.tomer.apple-music-chatgpt"
@@ -33,6 +35,8 @@ PYTHON = ROOT / ".venv/bin/python"
 CONFIG_DIR = Path.home() / ".config/tomer-apple-music-mcp/chatgpt-profiles"
 PROFILE = "apple-music-background"
 PROFILE_FILE = CONFIG_DIR / (PROFILE + ".yaml")
+FOREGROUND_PROFILE_FILE = CONFIG_DIR / "apple-music-chatgpt.yaml"
+ITEM_NOT_FOUND = -25300
 PLIST = Path.home() / "Library/LaunchAgents" / (LABEL + ".plist")
 LOGS = Path.home() / ".local/state/tomer-apple-music-mcp"
 PORT = 61356
@@ -119,27 +123,36 @@ class Keychain:
                     status = self.sec.SecItemUpdate(query, attributes)
         self.check(status)
 
-    def read(self, account):
+    def read_optional(self, account):
         result = ct.c_void_p()
         with self.query(account, retrieve=True) as query:
-            self.check(self.sec.SecItemCopyMatching(query, ct.byref(result)))
+            status = self.sec.SecItemCopyMatching(query, ct.byref(result))
+        if status == ITEM_NOT_FOUND:
+            return None
+        self.check(status)
         try:
             length = self.cf.CFDataGetLength(result)
             return ct.string_at(self.cf.CFDataGetBytePtr(result), length).decode()
         finally:
             self.cf.CFRelease(result)
 
+    def read(self, account):
+        value = self.read_optional(account)
+        if value is None:
+            raise RuntimeError(f"macOS Keychain returned error {ITEM_NOT_FOUND}.")
+        return value
+
     def delete(self, account):
         with self.query(account) as query:
             status = self.sec.SecItemDelete(query)
-        if status != -25300:
+        if status != ITEM_NOT_FOUND:
             self.check(status)
 
 
 def read_settings():
     settings = json.loads(PROFILE_FILE.read_text())
     tunnel_id = settings["control_plane"]["tunnel_id"]
-    if not re.fullmatch(r"tunnel_[A-Za-z0-9_]+", tunnel_id):
+    if not re.fullmatch(r"tunnel_[A-Za-z0-9_-]+", tunnel_id):
         raise RuntimeError("Invalid tunnel ID in the background profile.")
     return settings, tunnel_id
 
@@ -231,19 +244,34 @@ def stop_foreground():
                 pass
 
 
-def install():
-    if not sys.stdin.isatty():
-        raise RuntimeError("Open Enable ChatGPT Background.command to enter the key privately.")
-    _, tunnel_id = read_settings()
-    if not CLIENT.is_file() or not PYTHON.is_file():
-        raise RuntimeError("The installed Apple Music runtime or tunnel client is missing.")
-    keychain = Keychain()
+@dataclass(frozen=True)
+class Previous:
+    key: str | None
+    plist: bytes | None
+
+
+def ensure_background_profile():
+    """Derive the background profile from the one Connect ChatGPT.command writes."""
+    if PROFILE_FILE.exists():
+        return
+    if not FOREGROUND_PROFILE_FILE.exists():
+        raise RuntimeError("Run Connect ChatGPT.command first to create the tunnel profile.")
+    fd = os.open(PROFILE_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as stream:
+        stream.write(FOREGROUND_PROFILE_FILE.read_text())
+
+
+def prompt_key():
     print("Enable automatic Apple Music connection for ChatGPT.")
     print("Your OpenAI runtime key will be saved in macOS Keychain, never in this project.")
     print("Paste the same OpenAI key used earlier. Characters will stay hidden.")
     key = getpass.getpass("OpenAI runtime API key: ").strip()
     if not key or any(char.isspace() for char in key):
         raise RuntimeError("The key is empty or contains whitespace.")
+    return key
+
+
+def check_key(key):
     subprocess.run(
         arguments("doctor"),
         env=environment(key),
@@ -252,38 +280,91 @@ def install():
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    keychain.save(tunnel_id, key)
-    if keychain.read(tunnel_id) != key:
-        raise RuntimeError("Could not verify the saved Keychain entry.")
-    del key
+
+
+def prepare_logs():
     LOGS.mkdir(parents=True, exist_ok=True, mode=0o700)
     for name in ("chatgpt-tunnel.log", "chatgpt-tunnel-error.log"):
         fd = os.open(LOGS / name, os.O_WRONLY | os.O_CREAT, 0o600)
         os.close(fd)
         os.chmod(LOGS / name, 0o600)
-    PLIST.parent.mkdir(parents=True, exist_ok=True)
-    launchctl("bootout", TARGET, check=False)
+
+
+def probe_port():
     with socket.socket() as probe:
+        # The old agent's listener may still be in TIME_WAIT right after bootout.
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             probe.bind(("127.0.0.1", PORT))
         except OSError as error:
             raise RuntimeError(
                 "The background health port is in use. Ask Codex to check it."
             ) from error
-    PLIST.write_bytes(plistlib.dumps(make_plist()))
-    PLIST.chmod(0o600)
-    launchctl("bootstrap", DOMAIN, str(PLIST))
+
+
+def wait_until_ready():
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         if ready():
-            stop_foreground()
-            print("Connected. Automatic startup is enabled.")
-            print("You can close both Terminal windows. Keep your Mac awake and online.")
-            return 0
+            return
         time.sleep(1)
+    raise RuntimeError(
+        "The background connection was not ready. Any previous background connection was restored."
+    )
+
+
+def activate(keychain, tunnel_id, key):
+    keychain.save(tunnel_id, key)
+    if keychain.read(tunnel_id) != key:
+        raise RuntimeError("Could not verify the saved Keychain entry.")
+    prepare_logs()
+    PLIST.parent.mkdir(parents=True, exist_ok=True)
     launchctl("bootout", TARGET, check=False)
-    PLIST.unlink(missing_ok=True)
-    raise RuntimeError("The background connection was not ready. The old connection was kept.")
+    probe_port()
+    PLIST.write_bytes(plistlib.dumps(make_plist()))
+    PLIST.chmod(0o600)
+    launchctl("bootstrap", DOMAIN, str(PLIST))
+    wait_until_ready()
+
+
+def restore(keychain, tunnel_id, previous):
+    """Put back the key and LaunchAgent that were in place before this install."""
+    launchctl("bootout", TARGET, check=False)
+    if previous.key is None:
+        keychain.delete(tunnel_id)
+    else:
+        keychain.save(tunnel_id, previous.key)
+    if previous.plist is None:
+        PLIST.unlink(missing_ok=True)
+        return
+    PLIST.write_bytes(previous.plist)
+    PLIST.chmod(0o600)
+    launchctl("bootstrap", DOMAIN, str(PLIST), check=False)
+
+
+def install():
+    if not sys.stdin.isatty():
+        raise RuntimeError("Open Enable Apple Music Background.command to enter the key privately.")
+    ensure_background_profile()
+    _, tunnel_id = read_settings()
+    if not CLIENT.is_file() or not PYTHON.is_file():
+        raise RuntimeError("The installed Apple Music runtime or tunnel client is missing.")
+    key = prompt_key()
+    check_key(key)
+    keychain = Keychain()
+    previous = Previous(
+        key=keychain.read_optional(tunnel_id),
+        plist=PLIST.read_bytes() if PLIST.exists() else None,
+    )
+    try:
+        activate(keychain, tunnel_id, key)
+    except BaseException:
+        restore(keychain, tunnel_id, previous)
+        raise
+    stop_foreground()
+    print("Connected. Automatic startup is enabled.")
+    print("You can close both Terminal windows. Keep your Mac awake and online.")
+    return 0
 
 
 def run():
@@ -300,24 +381,37 @@ def run():
     os.execve(CLIENT, arguments("run"), environment(key))
 
 
+def status():
+    is_ready = ready()
+    print("Connected and ready." if is_ready else "Background connection is not ready.")
+    return 0 if is_ready else 1
+
+
+def stop():
+    launchctl("bootout", TARGET, check=False)
+    print("Stopped. Run 'start' to enable the background connection again.")
+    return 0
+
+
+def start():
+    launchctl("bootstrap", DOMAIN, str(PLIST))
+    print("Background connection starting.")
+    return 0
+
+
+ACTIONS: dict[str, Callable[[], int]] = {
+    "install": install,
+    "run": run,
+    "status": status,
+    "stop": stop,
+    "start": start,
+}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["install", "run", "status", "stop", "start"])
-    args = parser.parse_args()
-    if args.action == "install":
-        return install()
-    if args.action == "run":
-        return run()
-    if args.action == "status":
-        print("Connected and ready." if ready() else "Background connection is not ready.")
-        return 0 if ready() else 1
-    if args.action == "stop":
-        launchctl("bootout", TARGET, check=False)
-        print("Stopped. Run 'start' to enable the background connection again.")
-    if args.action == "start":
-        launchctl("bootstrap", DOMAIN, str(PLIST))
-        print("Background connection starting.")
-    return 0
+    parser.add_argument("action", choices=sorted(ACTIONS))
+    return ACTIONS[parser.parse_args().action]()
 
 
 if __name__ == "__main__":

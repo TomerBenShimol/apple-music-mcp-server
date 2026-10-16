@@ -2,6 +2,7 @@ import importlib.util
 import json
 import plistlib
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +14,7 @@ def service(tmp_path, monkeypatch):
     source = Path(__file__).resolve().parents[1] / "scripts/chatgpt_service.py"
     spec = importlib.util.spec_from_file_location("chatgpt_service", source)
     module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
     for name, value in {
         "ROOT": tmp_path / "runtime",
@@ -20,6 +22,7 @@ def service(tmp_path, monkeypatch):
         "CLIENT": tmp_path / "runtime/chatgpt/tunnel-client",
         "PYTHON": tmp_path / "runtime/.venv/bin/python",
         "PROFILE_FILE": tmp_path / "profile.json",
+        "FOREGROUND_PROFILE_FILE": tmp_path / "foreground.json",
         "PLIST": tmp_path / "LaunchAgents/service.plist",
         "LOGS": tmp_path / "logs",
     }.items():
@@ -40,7 +43,14 @@ def service(tmp_path, monkeypatch):
         def read(self, account):
             return stored[account]
 
+        def read_optional(self, account):
+            return stored.get(account)
+
+        def delete(self, account):
+            stored.pop(account, None)
+
     monkeypatch.setattr(module, "Keychain", FakeKeychain)
+    module.test_keychain = stored
     monkeypatch.setattr(
         module.subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess(a, 0)
     )
@@ -55,6 +65,9 @@ class SimpleSocket:
     def __exit__(self, *args):
         pass
 
+    def setsockopt(self, *args):
+        pass
+
     def bind(self, address):
         pass
 
@@ -65,9 +78,10 @@ def test_startup_failure_keeps_foreground_and_no_secret_file(service, monkeypatc
     monkeypatch.setattr(service.time, "monotonic", lambda: next(clock))
     monkeypatch.setattr(service, "launchctl", lambda *a, **kw: None)
     monkeypatch.setattr(service, "stop_foreground", lambda: pytest.fail("old connection stopped"))
-    with pytest.raises(RuntimeError, match="old connection was kept"):
+    with pytest.raises(RuntimeError, match="previous background connection was restored"):
         service.install()
     assert not service.PLIST.exists()
+    assert "tunnel_test" not in service.test_keychain
     for file in service.ROOT.parent.rglob("*"):
         if file.is_file():
             assert b"test-key-never-in-a-file" not in file.read_bytes()
@@ -116,3 +130,42 @@ def test_foreground_replacement_targets_only_exact_existing_tunnel(service, monk
     monkeypatch.setattr(service.os, "kill", lambda pid, sig: killed.append(pid))
     service.stop_foreground()
     assert killed == [123]
+
+
+def test_failed_reinstall_restores_the_working_key_and_service(service, monkeypatch):
+    service.test_keychain["tunnel_test"] = "old-working-key"
+    service.PLIST.parent.mkdir(parents=True)
+    service.PLIST.write_bytes(b"old plist")
+    events = []
+    monkeypatch.setattr(service, "launchctl", lambda *a, **kw: events.append(a[0]))
+    monkeypatch.setattr(service, "ready", lambda: False)
+    clock = iter([0, 61])
+    monkeypatch.setattr(service.time, "monotonic", lambda: next(clock))
+    with pytest.raises(RuntimeError, match="previous background connection was restored"):
+        service.install()
+    assert service.test_keychain["tunnel_test"] == "old-working-key"
+    assert service.PLIST.read_bytes() == b"old plist"
+    assert events[-1] == "bootstrap"
+
+
+def test_install_derives_the_background_profile_from_the_foreground_one(service, monkeypatch):
+    profile = service.PROFILE_FILE.read_text()
+    service.PROFILE_FILE.unlink()
+    service.FOREGROUND_PROFILE_FILE.write_text(profile)
+    monkeypatch.setattr(service, "launchctl", lambda *a, **kw: None)
+    monkeypatch.setattr(service, "ready", lambda: True)
+    monkeypatch.setattr(service, "stop_foreground", lambda: None)
+    assert service.install() == 0
+    assert service.PROFILE_FILE.read_text() == profile
+    assert service.PROFILE_FILE.stat().st_mode & 0o777 == 0o600
+
+
+def test_install_without_any_profile_explains_the_first_step(service):
+    service.PROFILE_FILE.unlink()
+    with pytest.raises(RuntimeError, match="Connect ChatGPT.command"):
+        service.install()
+
+
+def test_tunnel_ids_with_dashes_are_accepted(service):
+    service.PROFILE_FILE.write_text('{"control_plane": {"tunnel_id": "tunnel_a-b"}}')
+    assert service.read_settings()[1] == "tunnel_a-b"
