@@ -119,6 +119,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         signed_in = bool(service.api.credentials.user_token())
         result = {
             "web_signed_in": signed_in,
+            "token_from_environment": service.api.credentials.user_token_from_environment(),
             "web_accessible": False,
             "credential_directory": str(service.api.credentials.root),
             "login_tool": "connect_apple_music",

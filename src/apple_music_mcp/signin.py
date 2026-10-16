@@ -9,6 +9,10 @@ from .auth import Credentials, MusicError, private_json, read_json
 from .browser_login import browser_login
 
 ACTIVE = {"starting", "waiting_for_sign_in"}
+ENVIRONMENT_OVERRIDE = (
+    "APPLE_MUSIC_USER_TOKEN is set in this server's environment and overrides any sign-in. "
+    "Remove it from the MCP server configuration, restart the server, then connect again."
+)
 
 
 class SignInManager:
@@ -62,6 +66,8 @@ class SignInManager:
         return state
 
     def start(self, timeout: int = 900) -> dict:
+        if self.credentials.user_token_from_environment():
+            return {"status": "blocked", "message": ENVIRONMENT_OVERRIDE}
         with self.mutex:
             if self.thread is not None and self.thread.is_alive():
                 return {**self.status(), "already_running": True}

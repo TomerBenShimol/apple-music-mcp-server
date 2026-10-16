@@ -223,6 +223,10 @@ rewriting; if verification fails, that recovery copy remains in Music.
 | `APPLE_MUSIC_DEVELOPER_TOKEN` | Supply your own Apple Music developer token |
 | `APPLE_MUSIC_USER_TOKEN` | Supply an existing music user token instead of the saved token |
 
+`APPLE_MUSIC_USER_TOKEN` can supply an existing music token instead of the saved token;
+while it is set, `connect_apple_music` refuses to start, because a new sign-in could
+never take effect. `get_status` reports `token_from_environment`.
+
 Keep tokens in your local environment or credential store. Do not put them in MCP
 configuration committed to this repository.
 

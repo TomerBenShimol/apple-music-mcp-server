@@ -15,6 +15,7 @@ def service(tmp_path):
     api = MagicMock()
     api.credentials.user_token.return_value = None
     api.credentials.root = tmp_path
+    api.credentials.user_token_from_environment.return_value = False
     return MusicService(api=api, native=native)
 
 
@@ -88,3 +89,12 @@ async def test_auto_backend_prefers_authenticated_web_without_touching_music(ser
         await client.call_tool("list_playlists", {})
     service.api.list_playlists.assert_called_once_with(50, 0)
     service.native.call.assert_not_called()
+
+
+async def test_status_says_when_the_environment_supplies_the_token(service):
+    service.signin = MagicMock()
+    service.signin.status.return_value = {"status": "not_started"}
+    service.api.credentials.user_token_from_environment.return_value = True
+    async with Client(create_server(service)) as client:
+        result = await client.call_tool("get_status", {})
+    assert result.data["token_from_environment"] is True

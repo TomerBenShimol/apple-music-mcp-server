@@ -82,3 +82,13 @@ def test_mcp_shutdown_cancels_signin_and_waits_for_browser_cleanup(tmp_path, mon
     assert cleaned.is_set()
     assert not manager.thread.is_alive()
     assert manager.status()["status"] == "cancelled"
+
+
+def test_signin_refuses_while_an_environment_token_overrides_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPLE_MUSIC_USER_TOKEN", "e" * 40)
+    monkeypatch.setattr(
+        "apple_music_mcp.signin.browser_login", lambda *a, **kw: pytest.fail("browser opened")
+    )
+    result = SignInManager(Credentials(tmp_path)).start()
+    assert result["status"] == "blocked"
+    assert "APPLE_MUSIC_USER_TOKEN" in result["message"]

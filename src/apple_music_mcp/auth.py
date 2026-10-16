@@ -28,6 +28,9 @@ class TransientMusicError(MusicError):
     """A failure worth retrying later: the network, a rate limit, or an Apple server error."""
 
 
+USER_TOKEN_ENV = "APPLE_MUSIC_USER_TOKEN"
+
+
 def data_dir() -> Path:
     return Path(
         os.environ.get("APPLE_MUSIC_MCP_HOME", "~/.config/tomer-apple-music-mcp")
@@ -74,9 +77,12 @@ class Credentials:
         self.root = root or data_dir()
 
     def user_token(self) -> str | None:
-        return os.environ.get("APPLE_MUSIC_USER_TOKEN") or read_json(
-            self.root / "credentials.json"
-        ).get("user_token")
+        return os.environ.get(USER_TOKEN_ENV) or read_json(self.root / "credentials.json").get(
+            "user_token"
+        )
+
+    def user_token_from_environment(self) -> bool:
+        return bool(os.environ.get(USER_TOKEN_ENV))
 
     @staticmethod
     def validate_user_token(token: str) -> None:
@@ -95,7 +101,7 @@ class Credentials:
         )
 
     def user_token_source(self) -> str | None:
-        if os.environ.get("APPLE_MUSIC_USER_TOKEN"):
+        if os.environ.get(USER_TOKEN_ENV):
             return None
         return read_json(self.root / "credentials.json").get("source")
 
