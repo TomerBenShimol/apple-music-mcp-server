@@ -128,6 +128,21 @@ def next_offset(data: dict) -> int | None:
     return int(value) if value and value.isdigit() else None
 
 
+def desired_playlist_tracks(
+    targets: list[dict], before: list[dict], skip_duplicates: bool
+) -> list[dict]:
+    existing = {s["id"] for s in before} | {s["catalog_id"] for s in before if s["catalog_id"]}
+    desired = []
+    for target in targets:
+        identities = {target["id"]}
+        if target["catalog_id"]:
+            identities.add(target["catalog_id"])
+        if not skip_duplicates or not identities.intersection(existing):
+            desired.append(target)
+            existing.update(identities)
+    return desired
+
+
 class MusicAPI:
     def __init__(self, credentials: Credentials | None = None, client: httpx.Client | None = None):
         self.credentials = credentials or Credentials()
@@ -281,14 +296,15 @@ class MusicAPI:
             "next_offset": next_offset(result),
         }
 
-    def get_song(self, song_id: str) -> dict:
+    def song_request(self, song_id: str) -> tuple[str, bool]:
         if CATALOG_ID.fullmatch(song_id):
-            path = f"/v1/catalog/{self.resolve_storefront()}/songs/{song_id}"
-            personal = False
-        elif LIBRARY_SONG_ID.fullmatch(song_id):
-            path, personal = f"/v1/me/library/songs/{song_id}", True
-        else:
-            raise MusicError("Use a numeric catalog song ID or an i.… library song ID.")
+            return f"/v1/catalog/{self.resolve_storefront()}/songs/{song_id}", False
+        if LIBRARY_SONG_ID.fullmatch(song_id):
+            return f"/v1/me/library/songs/{song_id}", True
+        raise MusicError("Use a numeric catalog song ID or an i.… library song ID.")
+
+    def get_song(self, song_id: str) -> dict:
+        path, personal = self.song_request(song_id)
         items = self.request("GET", path, personal=personal).get("data", [])
         if len(items) != 1:
             raise MusicError("Song not found.")
@@ -414,15 +430,7 @@ class MusicAPI:
         self.get_playlist(playlist_id, writable=True)
         targets = [self.get_song(i) for i in song_ids]
         before = self.all_playlist_tracks(playlist_id)
-        existing = {s["id"] for s in before} | {s["catalog_id"] for s in before if s["catalog_id"]}
-        desired = []
-        for target in targets:
-            identities = {target["id"]}
-            if target["catalog_id"]:
-                identities.add(target["catalog_id"])
-            if not skip_duplicates or not identities.intersection(existing):
-                desired.append(target)
-                existing.update(identities)
+        desired = desired_playlist_tracks(targets, before, skip_duplicates)
         if dry_run:
             return {"dry_run": True, "adding": desired, "skipped": len(targets) - len(desired)}
         if desired:

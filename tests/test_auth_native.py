@@ -309,3 +309,23 @@ def test_failed_native_read_is_not_marked_uncertain(monkeypatch):
     with pytest.raises(MusicError) as error:
         NativeMusic().call("search", query="x")
     assert "uncertain" not in str(error.value)
+
+
+def test_claims_of_a_non_object_payload_are_empty():
+    from apple_music_mcp.auth import claims
+
+    payload = base64.urlsafe_b64encode(b"[1, 2]").decode().rstrip("=")
+    assert claims("h." + payload + ".s") == {}
+
+
+def test_web_token_is_scraped_and_cached(tmp_path):
+    payload = base64.urlsafe_b64encode(b'{"iss":"AMPWebPlay","exp":9999999999}').decode()
+    token = "eyJh." + payload.rstrip("=") + ".sig"
+
+    def handler(request):
+        body = '<script src="/assets/index~abc123.js">' if request.url.path == "/us/new" else token
+        return httpx.Response(200, text=body)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert Credentials(tmp_path).developer_token(client) == (token, True)
+    assert json.loads((tmp_path / "web-token.json").read_text()) == {"token": token}

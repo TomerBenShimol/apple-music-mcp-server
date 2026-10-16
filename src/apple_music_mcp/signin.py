@@ -26,10 +26,9 @@ class SignInManager:
         self.thread: threading.Thread | None = None
 
     def _acquire(self, *, create: bool) -> int:
-        if create:
-            self.credentials.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
         if create:
+            self.credentials.root.mkdir(parents=True, exist_ok=True, mode=0o700)
             flags |= os.O_CREAT
         fd = os.open(self.lock_path, flags, 0o600)
         try:

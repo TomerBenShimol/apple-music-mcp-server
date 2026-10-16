@@ -67,9 +67,41 @@ def claims(token: str) -> dict:
     """Decode public JWT metadata for expiry; this does not verify authenticity."""
     try:
         segment = token.split(".")[1]
-        return json.loads(base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4)))
+        value = json.loads(base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4)))
     except (ValueError, IndexError, UnicodeError):
         return {}
+    return value if isinstance(value, dict) else {}
+
+
+JWT = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+
+
+def checked_explicit(token: str) -> str:
+    if claims(token).get("exp", 0) <= time.time():
+        raise MusicError("APPLE_MUSIC_DEVELOPER_TOKEN is invalid or expired.")
+    return token
+
+
+def is_current_web_token(token: str) -> bool:
+    payload = claims(token)
+    return payload.get("iss") == "AMPWebPlay" and payload.get("exp", 0) > time.time() + 60
+
+
+def scrape_web_token(client: httpx.Client) -> str:
+    try:
+        page = client.get("https://music.apple.com/us/new", follow_redirects=True)
+        page.raise_for_status()
+        bundles = re.findall(r"/assets/index~[A-Za-z0-9]+\.js", page.text)
+        if not bundles:
+            raise MusicError("Apple changed its web player. Use an Apple developer token.")
+        script = client.get("https://music.apple.com" + bundles[0])
+        script.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise MusicError("Cannot reach Apple's web player to initialize catalog access.") from exc
+    valid = [t for t in JWT.findall(script.text) if is_current_web_token(t)]
+    if not valid:
+        raise MusicError("No current Apple web-player token found. Try again later.")
+    return valid[0]
 
 
 class Credentials:
@@ -112,35 +144,13 @@ class Credentials:
         """Return (token, web_player). An explicit developer token takes precedence."""
         explicit = os.environ.get("APPLE_MUSIC_DEVELOPER_TOKEN")
         if explicit and not force_web:
-            if claims(explicit).get("exp", 0) <= time.time():
-                raise MusicError("APPLE_MUSIC_DEVELOPER_TOKEN is invalid or expired.")
-            return explicit, False
+            return checked_explicit(explicit), False
         cached = read_json(self.root / "web-token.json").get("token", "")
         if claims(cached).get("exp", 0) > time.time() + 3600:
             return cached, True
-        try:
-            page = client.get("https://music.apple.com/us/new", follow_redirects=True)
-            page.raise_for_status()
-            bundles = re.findall(r"/assets/index~[A-Za-z0-9]+\.js", page.text)
-            if not bundles:
-                raise MusicError("Apple changed its web player. Use an Apple developer token.")
-            script = client.get("https://music.apple.com" + bundles[0])
-            script.raise_for_status()
-            tokens = re.findall(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", script.text)
-            valid = [
-                t
-                for t in tokens
-                if claims(t).get("iss") == "AMPWebPlay"
-                and claims(t).get("exp", 0) > time.time() + 60
-            ]
-            if not valid:
-                raise MusicError("No current Apple web-player token found. Try again later.")
-            private_json(self.root / "web-token.json", {"token": valid[0]})
-            return valid[0], True
-        except httpx.HTTPError as exc:
-            raise MusicError(
-                "Cannot reach Apple's web player to initialize catalog access."
-            ) from exc
+        token = scrape_web_token(client)
+        private_json(self.root / "web-token.json", {"token": token})
+        return token, True
 
 
 def verify_user_token(credentials: Credentials, token: str, *, web: bool) -> str:

@@ -92,10 +92,17 @@ class Keychain:
             return ref
 
         try:
-            if not attributes_only:
-                put("kSecClass", self.constant("kSecClassGenericPassword"))
-                put("kSecAttrService", string(SERVICE))
-                put("kSecAttrAccount", string(account))
+            identity = (
+                ()
+                if attributes_only
+                else (
+                    ("kSecClass", self.constant("kSecClassGenericPassword")),
+                    ("kSecAttrService", string(SERVICE)),
+                    ("kSecAttrAccount", string(account)),
+                )
+            )
+            for key, value in identity:
+                put(key, value)
             if data is not None:
                 raw = data.encode()
                 ref = self.cf.CFDataCreate(None, raw, len(raw))

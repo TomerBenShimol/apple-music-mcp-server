@@ -23,31 +23,35 @@ class MusicEditLock:
             raise MusicError("Another music edit is running. Wait for it to finish, then retry.")
         try:
             if self.depth == 0 and os.name == "posix":
-                import fcntl
-
-                self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                self.fd = os.open(
-                    self.path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600
-                )
-                deadline = time.monotonic() + self.timeout
-                while True:
-                    try:
-                        fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        break
-                    except BlockingIOError:
-                        if time.monotonic() >= deadline:
-                            raise MusicError(
-                                "Another music edit is running. Wait for it to finish, then retry."
-                            ) from None
-                        time.sleep(0.05)
+                self._acquire_file()
             self.depth += 1
             return self
         except BaseException:
-            if self.fd is not None:
-                os.close(self.fd)
-                self.fd = None
-            self.thread.release()
+            self._abort_acquire()
             raise
+
+    def _abort_acquire(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+        self.thread.release()
+
+    def _acquire_file(self):
+        import fcntl
+
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        deadline = time.monotonic() + self.timeout
+        while True:
+            try:
+                fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise MusicError(
+                        "Another music edit is running. Wait for it to finish, then retry."
+                    ) from None
+                time.sleep(0.05)
 
     def __exit__(self, *args):
         try:

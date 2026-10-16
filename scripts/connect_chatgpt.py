@@ -23,29 +23,34 @@ PROFILE = "apple-music-chatgpt"
 TUNNEL_ID = re.compile(r"tunnel_[A-Za-z0-9_-]+\Z")
 
 
-def main() -> int:
+class SetupError(Exception):
+    """A setup problem the user can fix; its text is safe to print."""
+
+
+def require_installed() -> None:
     if not sys.stdin.isatty():
-        print("Run this setup in Terminal so the API key can be entered privately.")
-        return 1
+        raise SetupError("Run this setup in Terminal so the API key can be entered privately.")
     if not CLIENT.is_file() or not (RUNTIME / ".venv/bin/python").is_file():
-        print("The Apple Music MCP runtime and OpenAI tunnel-client must be installed first.")
-        return 1
-    print("Create a private tunnel associated with your ChatGPT workspace at:")
-    print("https://platform.openai.com/settings/organization/tunnels")
-    print("Create a runtime API key with Tunnels Read + Use at:")
-    print("https://platform.openai.com/settings/organization/api-keys")
-    print("Only music tool calls and results pass through this tunnel to ChatGPT.")
+        raise SetupError(
+            "The Apple Music MCP runtime and OpenAI tunnel-client must be installed first."
+        )
+
+
+def read_tunnel_id() -> str:
     tunnel_id = input("Tunnel ID (tunnel_…): ").strip()
     if not TUNNEL_ID.fullmatch(tunnel_id):
-        print("Enter the tunnel ID from Platform settings.")
-        return 1
+        raise SetupError("Enter the tunnel ID from Platform settings.")
+    return tunnel_id
+
+
+def read_api_key() -> str:
     api_key = getpass.getpass("OpenAI runtime API key (hidden; never saved): ").strip()
     if not api_key or any(c.isspace() for c in api_key):
-        print("The runtime API key is empty or invalid.")
-        return 1
+        raise SetupError("The runtime API key is empty or invalid.")
+    return api_key
 
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-    profile_file = PROFILE_DIR / (PROFILE + ".yaml")
+
+def tunnel_environment(api_key):
     # This connection is specifically to OpenAI and our one MCP command. Ignore
     # inherited tunnel overrides that could change its endpoint, target, or logging.
     environment = {
@@ -67,6 +72,12 @@ def main() -> int:
     }
     environment["CONTROL_PLANE_API_KEY"] = api_key
     environment["APPLE_MUSIC_STOREFRONT"] = "il"
+    return environment
+
+
+def write_profile(tunnel_id):
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    profile_file = PROFILE_DIR / (PROFILE + ".yaml")
     command = shlex.join([str(RUNTIME / ".venv/bin/python"), "-m", "apple_music_mcp", "serve"])
     settings = {
         "config_version": 1,
@@ -90,6 +101,9 @@ def main() -> int:
     with os.fdopen(fd, "w") as stream:
         json.dump(settings, stream, indent=2)
     temporary.replace(profile_file)
+
+
+def common_arguments():
     common = [
         str(CLIENT),
         "--profile",
@@ -104,11 +118,27 @@ def main() -> int:
         "--log.http-raw-unsafe=false",
         "--allow-remote-ui=false",
     ]
+    return common
+
+
+def main() -> int:
+    try:
+        require_installed()
+        print("Create a private tunnel associated with your ChatGPT workspace at:")
+        print("https://platform.openai.com/settings/organization/tunnels")
+        print("Create a runtime API key with Tunnels Read + Use at:")
+        print("https://platform.openai.com/settings/organization/api-keys")
+        print("Only music tool calls and results pass through this tunnel to ChatGPT.")
+        tunnel_id = read_tunnel_id()
+        api_key = read_api_key()
+    except SetupError as error:
+        print(error)
+        return 1
+    write_profile(tunnel_id)
+    environment = tunnel_environment(api_key)
+    common = common_arguments()
     doctor = subprocess.run(
-        [common[0], "doctor", *common[1:], "--explain"],
-        env=environment,
-        cwd=RUNTIME,
-        check=False,
+        [common[0], "doctor", *common[1:], "--explain"], env=environment, cwd=RUNTIME, check=False
     )
     if doctor.returncode:
         print("The tunnel check failed. Resolve the reported access/configuration issue first.")
