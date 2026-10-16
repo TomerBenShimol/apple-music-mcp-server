@@ -163,8 +163,15 @@ class MusicAPI:
             return {}
         error = status_error(response)
         if error is not None:
+            self.forget_rejected_web_token(response.status_code, web)
             raise error
         return decode(response)
+
+    def forget_rejected_web_token(self, status: int, web: bool) -> None:
+        # The cached web-player token is trusted until its exp claim; a rejection is the only
+        # sign Apple rotated it early, so the next request fetches a fresh one.
+        if web and status in {401, 403}:
+            self.credentials.forget_web_token()
 
     def personal_token(self) -> str:
         token = self.credentials.user_token()

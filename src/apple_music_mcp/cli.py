@@ -71,7 +71,9 @@ def main() -> None:
             if not result["web_accessible"] and not result.get("native", {}).get("accessible"):
                 sys.exit(1)
         elif args.command == "logout":
-            (Credentials().root / "credentials.json").unlink(missing_ok=True)
+            credentials = Credentials()
+            (credentials.root / "credentials.json").unlink(missing_ok=True)
+            credentials.forget_web_token()
             print("Removed this server's saved music token.")
     except MusicError as exc:
         print(str(exc), file=sys.stderr)

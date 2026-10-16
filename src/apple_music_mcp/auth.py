@@ -105,6 +105,9 @@ class Credentials:
             return None
         return read_json(self.root / "credentials.json").get("source")
 
+    def forget_web_token(self) -> None:
+        (self.root / "web-token.json").unlink(missing_ok=True)
+
     def developer_token(self, client: httpx.Client, force_web: bool = False) -> tuple[str, bool]:
         """Return (token, web_player). An explicit developer token takes precedence."""
         explicit = os.environ.get("APPLE_MUSIC_DEVELOPER_TOKEN")

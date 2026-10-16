@@ -376,3 +376,24 @@ def test_strict_storefront_lookup_reports_a_rejected_token(api_factory):
 def test_check_access_reports_errors_without_raising(api_factory):
     api = api_factory(routed(("GET", "/storefront", answer(401))))
     assert api.check_access() == {"web_accessible": False, "web_error": REJECTED}
+
+
+def test_rejected_web_player_token_is_dropped_for_a_fresh_fetch(tmp_path):
+    (tmp_path / "web-token.json").write_text('{"token": "cached"}')
+    transport = httpx.MockTransport(answer(401))
+    api = MusicAPI(FakeCredentials(tmp_path), httpx.Client(transport=transport))
+    with pytest.raises(MusicError, match="rejected access"):
+        api.request("GET", "/v1/me/library/songs")
+    assert not (tmp_path / "web-token.json").exists()
+
+
+def test_explicit_developer_token_rejection_keeps_the_web_cache(tmp_path, monkeypatch):
+    (tmp_path / "web-token.json").write_text('{"token": "cached"}')
+    credentials = FakeCredentials(tmp_path)
+    monkeypatch.setattr(
+        credentials, "developer_token", lambda client, force_web=False: ("x", False)
+    )
+    api = MusicAPI(credentials, httpx.Client(transport=httpx.MockTransport(answer(403))))
+    with pytest.raises(MusicError, match="rejected access"):
+        api.request("GET", "/v1/me/library/songs")
+    assert (tmp_path / "web-token.json").exists()
