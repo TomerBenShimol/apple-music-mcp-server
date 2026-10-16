@@ -15,3 +15,6 @@ dist/
 *.zip
 .DS_Store
 build/
+
+# Personal macOS launchers; setup commands are documented in the README.
+/*.command

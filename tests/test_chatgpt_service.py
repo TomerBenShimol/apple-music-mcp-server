@@ -162,7 +162,7 @@ def test_install_derives_the_background_profile_from_the_foreground_one(service,
 
 def test_install_without_any_profile_explains_the_first_step(service):
     service.PROFILE_FILE.unlink()
-    with pytest.raises(RuntimeError, match="Connect ChatGPT.command"):
+    with pytest.raises(RuntimeError, match=r"scripts/connect_chatgpt\.py"):
         service.install()
 
 

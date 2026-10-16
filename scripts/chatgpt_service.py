@@ -258,11 +258,11 @@ class Previous:
 
 
 def ensure_background_profile():
-    """Derive the background profile from the one Connect ChatGPT.command writes."""
+    """Derive the background profile from the one connect_chatgpt.py writes."""
     if PROFILE_FILE.exists():
         return
     if not FOREGROUND_PROFILE_FILE.exists():
-        raise RuntimeError("Run Connect ChatGPT.command first to create the tunnel profile.")
+        raise RuntimeError("Run scripts/connect_chatgpt.py first to create the tunnel profile.")
     fd = os.open(PROFILE_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
         stream.write(FOREGROUND_PROFILE_FILE.read_text())
@@ -351,7 +351,9 @@ def restore(keychain, tunnel_id, previous):
 
 def install():
     if not sys.stdin.isatty():
-        raise RuntimeError("Open Enable Apple Music Background.command to enter the key privately.")
+        raise RuntimeError(
+            "Run chatgpt_service.py install in an interactive terminal to enter the key privately."
+        )
     ensure_background_profile()
     _, tunnel_id = read_settings()
     if not CLIENT.is_file() or not PYTHON.is_file():
