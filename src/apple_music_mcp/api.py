@@ -13,13 +13,76 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 
-from .auth import Credentials, MusicError
+from .auth import Credentials, MusicError, TransientMusicError
 
 WEB_ORIGIN = "https://amp-api.music.apple.com"
 PUBLIC_ORIGIN = "https://api.music.apple.com"
 LIBRARY_SONG_ID = re.compile(r"i\.[A-Za-z0-9.\-]+\Z")
 PLAYLIST_ID = re.compile(r"p\.[A-Za-z0-9.\-]+\Z")
 CATALOG_ID = re.compile(r"[0-9]+\Z")
+
+
+NOT_SIGNED_IN = (
+    "Apple Music is not signed in. Use the connect_apple_music tool, let the user "
+    "complete sign-in in the local browser, then check get_status before retrying."
+)
+REJECTED = (
+    "Apple Music rejected access. Reconnect using the connect_apple_music tool; "
+    "check that this account has an active Apple Music subscription."
+)
+NOT_FOUND = "Apple Music could not find this resource in this account/storefront."
+UNCERTAIN_WRITE = " The write outcome is uncertain; inspect the library before retrying."
+
+
+def validate_path(path: str) -> None:
+    # Never follow pagination to another origin or send music tokens to arbitrary URLs.
+    if not path.startswith("/v1/") or urlsplit(path).netloc or ".." in path:
+        raise MusicError("Invalid Apple Music API path.")
+
+
+def auth_headers(token: str, user_token: str | None) -> dict:
+    personal = {"Music-User-Token": user_token} if user_token else {}
+    return {"Authorization": "Bearer " + token, "Origin": "https://music.apple.com", **personal}
+
+
+def rate_limited(response: httpx.Response) -> TransientMusicError:
+    retry = response.headers.get("Retry-After")
+    wait = (
+        f"Retry after {retry} seconds."
+        if retry and retry.isdigit()
+        else "Wait before retrying; the shared web-player quota may take up to an hour to reset."
+    )
+    return TransientMusicError("Apple Music rate-limited this connection. " + wait)
+
+
+def status_error(response: httpx.Response) -> MusicError | None:
+    code = response.status_code
+    other = f"Apple Music returned HTTP {code}. Inspect the resource before retrying a write."
+    match code:
+        case 429:
+            return rate_limited(response)
+        case 401 | 403:
+            return MusicError(REJECTED)
+        case 404:
+            return MusicError(NOT_FOUND)
+        case _ if 200 <= code < 300:
+            return None
+        case _ if code >= 500:
+            return TransientMusicError(other)
+        case _:
+            return MusicError(other)
+
+
+def decode(response: httpx.Response) -> dict:
+    if not response.content:
+        return {}
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise MusicError(
+            "Apple Music returned an unreadable response. "
+            "Inspect the resource before retrying a write."
+        ) from exc
 
 
 def song(item: dict) -> dict:
@@ -84,72 +147,39 @@ class MusicAPI:
         web_only: bool = False,
         params: dict | None = None,
         body: dict | None = None,
+        missing_ok: bool = False,
     ) -> dict:
-        # Never follow pagination to another origin or send music tokens to arbitrary URLs.
-        if not path.startswith("/v1/") or urlsplit(path).netloc or ".." in path:
-            raise MusicError("Invalid Apple Music API path.")
-        user_token = self.credentials.user_token() if personal else None
-        if personal and not user_token:
-            raise MusicError(
-                "Apple Music is not signed in. Use the connect_apple_music tool, let the user "
-                "complete sign-in in the local browser, then check get_status before retrying."
-            )
+        validate_path(path)
+        user_token = self.personal_token() if personal else None
         token, web = self.credentials.developer_token(
             self.client,
             force_web=web_only or (personal and self.credentials.user_token_source() == "web"),
         )
         host = WEB_ORIGIN if web else PUBLIC_ORIGIN
-        headers = {"Authorization": "Bearer " + token, "Origin": "https://music.apple.com"}
-        if user_token:
-            headers["Music-User-Token"] = user_token
+        response = self.send(method, host + path, auth_headers(token, user_token), params, body)
+        if missing_ok and response.status_code == 404:
+            return {}
+        error = status_error(response)
+        if error is not None:
+            raise error
+        return decode(response)
+
+    def personal_token(self) -> str:
+        token = self.credentials.user_token()
+        if not token:
+            raise MusicError(NOT_SIGNED_IN)
+        return token
+
+    def send(
+        self, method: str, url: str, headers: dict, params: dict | None, body: dict | None
+    ) -> httpx.Response:
         try:
-            response = self.client.request(
-                method,
-                host + path,
-                headers=headers,
-                params=params,
-                json=body,
-                follow_redirects=False,
+            return self.client.request(
+                method, url, headers=headers, params=params, json=body, follow_redirects=False
             )
         except httpx.HTTPError as exc:
-            suffix = (
-                " The write outcome is uncertain; inspect the library before retrying."
-                if method != "GET"
-                else ""
-            )
-            raise MusicError("Could not reach Apple Music." + suffix) from exc
-        if response.status_code == 429:
-            retry = response.headers.get("Retry-After")
-            raise MusicError(
-                "Apple Music rate-limited this connection. "
-                + (
-                    f"Retry after {retry} seconds."
-                    if retry and retry.isdigit()
-                    else "Wait before retrying; the shared web-player quota "
-                    "may take up to an hour to reset."
-                )
-            )
-        if response.status_code in {401, 403}:
-            raise MusicError(
-                "Apple Music rejected access. Reconnect using the connect_apple_music tool; "
-                "check that this account has an active Apple Music subscription."
-            )
-        if response.status_code == 404:
-            raise MusicError("Apple Music could not find this resource in this account/storefront.")
-        if not 200 <= response.status_code < 300:
-            raise MusicError(
-                f"Apple Music returned HTTP {response.status_code}. "
-                "Inspect the resource before retrying a write."
-            )
-        if not response.content:
-            return {}
-        try:
-            return response.json()
-        except ValueError as exc:
-            raise MusicError(
-                "Apple Music returned an unreadable response. "
-                "Inspect the resource before retrying a write."
-            ) from exc
+            suffix = UNCERTAIN_WRITE if method != "GET" else ""
+            raise TransientMusicError("Could not reach Apple Music." + suffix) from exc
 
     def resolve_storefront(self) -> str:
         if not self._storefront_resolved and self.credentials.user_token():
@@ -258,7 +288,11 @@ class MusicAPI:
             "GET",
             f"/v1/me/library/playlists/{playlist_id}/tracks",
             params={"limit": limit, "offset": offset},
+            missing_ok=True,
         )
+        if not data:
+            # Apple answers an empty playlist's tracks with 404, so only a missing playlist errors.
+            self.get_playlist(playlist_id)
         return {
             "items": [song(i) for i in data.get("data", [])],
             "offset": offset,

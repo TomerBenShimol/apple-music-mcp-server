@@ -24,6 +24,10 @@ class MusicError(Exception):
     """An actionable failure suitable for an MCP tool response."""
 
 
+class TransientMusicError(MusicError):
+    """A failure worth retrying later: the network, a rate limit, or an Apple server error."""
+
+
 def data_dir() -> Path:
     return Path(
         os.environ.get("APPLE_MUSIC_MCP_HOME", "~/.config/tomer-apple-music-mcp")

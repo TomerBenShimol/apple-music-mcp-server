@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from apple_music_mcp.api import MusicAPI, next_offset
-from apple_music_mcp.auth import Credentials, MusicError
+from apple_music_mcp.auth import Credentials, MusicError, TransientMusicError
 
 
 class FakeCredentials(Credentials):
@@ -256,3 +256,71 @@ def test_repeated_pagination_raises_instead_of_returning_partial_playlist(api_fa
 def test_next_offset():
     assert next_offset({"next": "/v1/me/library/songs?offset=100&limit=100"}) == 100
     assert next_offset({}) is None
+
+
+def routed(*table):
+    """Answer each request from the first (method, path-suffix, respond) row that matches."""
+
+    def handler(request):
+        for method, suffix, respond in table:
+            if request.method == method and request.url.path.endswith(suffix):
+                return respond(request)
+        raise AssertionError(f"Unexpected {request.method} {request.url.path}")
+
+    return handler
+
+
+def answer(status, data=None):
+    return lambda request: httpx.Response(status, json=None if data is None else {"data": data})
+
+
+def test_adding_songs_to_an_empty_playlist_posts_them(api_factory):
+    posted = []
+
+    def accept(request):
+        posted.extend(json.loads(request.content)["data"])
+        return httpx.Response(204)
+
+    api = api_factory(
+        routed(
+            ("POST", "/tracks", accept),
+            ("GET", "/storefront", answer(200, [{"id": "us"}])),
+            ("GET", "/tracks", answer(404)),
+            ("GET", "/p.test", answer(200, [make_playlist()])),
+            ("GET", "/123", answer(200, [make_song("123")])),
+        )
+    )
+    result = api.add_playlist_tracks("p.test", ["123"], True, False)
+    assert result["added"] == ["123"]
+    assert posted == [{"id": "123", "type": "songs"}]
+
+
+def test_empty_playlist_reads_as_an_empty_page(api_factory):
+    api = api_factory(
+        routed(("GET", "/tracks", answer(404)), ("GET", "/p.test", answer(200, [make_playlist()])))
+    )
+    assert api.playlist_tracks("p.test", 100, 0) == {"items": [], "offset": 0, "next_offset": None}
+
+
+def test_tracks_of_a_missing_playlist_is_still_an_error(api_factory):
+    api = api_factory(routed(("GET", "", answer(404))))
+    with pytest.raises(MusicError, match="could not find"):
+        api.playlist_tracks("p.gone", 100, 0)
+
+
+def test_server_errors_are_transient_and_client_errors_are_not(api_factory):
+    with pytest.raises(TransientMusicError, match="HTTP 503"):
+        api_factory(routed(("GET", "", answer(503)))).request(
+            "GET", "/v1/catalog/us/search", personal=False
+        )
+    with pytest.raises(MusicError, match="HTTP 400") as error:
+        api_factory(routed(("GET", "", answer(400)))).request(
+            "GET", "/v1/catalog/us/search", personal=False
+        )
+    assert not isinstance(error.value, TransientMusicError)
+
+
+def test_rate_limit_is_transient(api_factory):
+    api = api_factory(routed(("GET", "", lambda r: httpx.Response(429))))
+    with pytest.raises(TransientMusicError, match="rate-limited"):
+        api.request("GET", "/v1/catalog/us/search", personal=False)
