@@ -5,11 +5,13 @@
 ![Built with FastMCP 3](https://img.shields.io/badge/built_with-FastMCP_3-6E56CF)
 ![Transport: stdio](https://img.shields.io/badge/transport-stdio-00897B)
 
-**Manage your Apple Music library and playlists from your AI coding agent.**
+Connect Apple Music to your favorite AI client and ask it to manage your music.
+Find a song, add it to your library, or put a playlist together without leaving
+your conversation.
 
-Search for music, add or remove songs, create playlists, and organize your library
-through 17 MCP tools built with Python and FastMCP. Install the server on your own
-Mac, sign in to your own Apple Music account, and connect your preferred client.
+This is a local MCP server built with Python and FastMCP, with 17 tools for catalog
+search, library edits, and playlists. Install it on your Mac and sign in to your
+own Apple Music account.
 
 > Find the album version of “Get Lucky” by Daft Punk and add it to my library.
 
@@ -17,9 +19,9 @@ Mac, sign in to your own Apple Music account, and connect your preferred client.
 
 > Remove this song from Evening, but keep it in my library.
 
-The server runs directly on macOS. **No Docker, Linux, or hosted server is required.**
-Your client starts the local MCP process when it connects; after setup, you do not
-need a separate Terminal window running the server.
+Your client starts the server on your Mac when it connects. You don't need to
+keep a separate Terminal window open after setup, or install Docker or Linux.
+There's no server to host.
 
 [Quick start](#quick-start) · [Client installation](#client-installation) ·
 [Tools](#tools) · [Configuration](#configuration) ·
@@ -27,39 +29,42 @@ need a separate Terminal window running the server.
 
 ## Features
 
-- **Catalog search:** find songs, albums, artists, and playlists.
-- **Library management:** browse your songs, inspect details, and add or remove songs.
-- **Playlist management:** create, rename, describe, delete, duplicate, and edit tracks.
-- **Native Music.app tools:** reorder playlists and import local audio files.
-- **Shared local sign-in:** configured clients use the same credential directory.
-- **Client setup helpers:** generate settings or install them with backups and conflict checks.
-- **Diagnostics:** check dependencies and discover tools before opening a client.
+- Search Apple's catalog for songs, albums, artists, and playlists.
+- Browse your library, look up song details, and add or remove songs.
+- Create playlists, change their names or descriptions, copy them, edit their tracks,
+  or delete them.
+- Reorder playlists and import local audio through Music.app.
+- Use the same saved sign-in across your configured clients.
 
-This is an independent integration. The default browser sign-in does not need an
-Apple developer account. It uses Apple's web player and some undocumented endpoints,
-which may change when Apple updates its player.
+The setup commands can write your client settings or print configuration for you
+to copy. They check for conflicts and back up existing settings before changing
+them. You can also check dependencies and tool discovery before opening a client.
+
+This project is independent of Apple. The default browser sign-in works without
+an Apple developer account. It relies on Apple's web player and some undocumented
+endpoints, so Apple changes can break it.
 
 ## Requirements
 
 | Requirement | Details |
 | --- | --- |
-| macOS | The primary installation target; Music.app automation requires a Mac |
-| Python 3.11+ | Check with `python3 --version`; use a newer interpreter if needed |
-| Git | Required for the clone-based installation below |
-| Apple Music account | An active subscription is required for personal library operations |
-| Browser | Google Chrome, or Playwright Chromium installed below |
-| MCP client | Install your coding agent or desktop client separately |
-| Internet access | Required for Apple sign-in and online catalog/library operations |
+| macOS | This guide is for Macs; Music.app automation also requires macOS |
+| Python 3.11+ | Run `python3 --version` to check your version |
+| Git | Used to clone the repository |
+| Apple Music account | You need an active subscription to work with your personal library |
+| Browser | Google Chrome, or Playwright Chromium using the command below |
+| MCP client | Your coding agent or desktop client needs to be installed already |
+| Internet access | Used for sign-in, catalog searches, and online library access |
 
-Sign in to Music.app too if you want native playlist reordering or local audio
-imports. Other operating systems are outside the primary setup documented here;
-see [compatibility boundaries](docs/clients.md#compatibility-boundaries).
+For playlist reordering and local audio imports, sign in to Music.app as well.
+If you're using another operating system, read the
+[compatibility notes](docs/clients.md#compatibility-boundaries).
 
 ## Quick start
 
 ### 1. Clone and install
 
-Run these commands in Terminal. `python3` must be Python 3.11 or newer.
+Open Terminal and check that `python3` is version 3.11 or newer, then run:
 
 ```bash
 git clone https://github.com/TomerBenShimol/apple-music-mcp-server.git
@@ -68,16 +73,17 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[browser]'
 ```
 
-The sign-in helper uses Google Chrome when installed. If you do not have Chrome,
-install its alternative browser:
+Sign-in uses Google Chrome if it's installed. If you don't have Chrome, install
+Playwright's Chromium browser:
 
 ```bash
 .venv/bin/python -m playwright install chromium
 ```
 
-All commands below run from this checkout. No virtual environment activation or
-global package installation is required. Keep the checkout and `.venv` in place:
-the client configurations point to their absolute paths.
+Run the remaining commands from this repository's directory. They use the virtual
+environment directly, so you don't have to activate it or install anything globally.
+Keep the repository and `.venv` where they are once you've connected your clients:
+their settings will point to those exact paths.
 
 ### 2. Sign in to Apple Music
 
@@ -86,17 +92,18 @@ the client configurations point to their absolute paths.
 .venv/bin/apple-music-mcp status
 ```
 
-Complete Apple's sign-in and verification in the browser window. The helper checks
-library access before saving the music token. A successful status check reports
-`"web_accessible": true`.
+Finish signing in with Apple in the browser window, including any verification
+step. The helper checks that it can access your library before saving the music
+token. Look for `"web_accessible": true` in the status output.
 
-Apple passwords and verification codes stay in Apple's sign-in flow. The temporary
-browser profile is deleted when sign-in ends. Saved credentials stay on your Mac
-in `~/.config/apple-music-mcp/credentials.json`, with private file permissions.
+You enter your Apple password and verification codes only in Apple's sign-in flow.
+The helper deletes its temporary browser profile when sign-in ends and saves your
+music credentials in `~/.config/apple-music-mcp/credentials.json` on your Mac,
+with private file permissions.
 
 ### 3. Connect your client
 
-Quit the target client before changing its settings, then run **one** installer:
+Quit the client you want to connect, then run its install command:
 
 ```bash
 # Choose your client:
@@ -108,9 +115,9 @@ Quit the target client before changing its settings, then run **one** installer:
 # .venv/bin/apple-music-mcp install vscode
 ```
 
-Reopen the client, reload its MCP connections if needed, and approve the Apple Music
-server when prompted. Your agent can then discover and call its tools.
-See [client installation](#client-installation) for individual commands and paths.
+Reopen your client and approve the Apple Music server when it asks. You may need
+to reload its MCP connections before the tools appear. Each client has its own
+command and settings path under [client installation](#client-installation).
 
 ### 4. Verify and try it
 
@@ -118,25 +125,26 @@ See [client installation](#client-installation) for individual commands and path
 .venv/bin/apple-music-mcp doctor --probe
 ```
 
-A successful probe reports `"status": "ready"` and `"tool_count": 17` under
-`mcp_probe`. This checks the local server; `status` separately checks your account
-with Apple.
+Under `mcp_probe`, look for `"status": "ready"` and `"tool_count": 17`.
+That confirms the local server can start and list its tools. Use `status` to check
+your Apple Music account access.
 
 Ask your agent:
 
 > Check my Apple Music connection and find songs by Daft Punk.
 
-Then request a library or playlist edit. You can ask naturally without naming the
-MCP server or its individual tools. If sign-in is needed later, the agent can call
-`connect_apple_music` to open the browser and check progress with `get_status`.
-Keep the client running until sign-in finishes.
+Once that works, ask for a library or playlist edit in your own words. Your agent
+chooses the tools; you don't have to name them. If you need to sign in again, it
+can open the browser with `connect_apple_music` and check progress with `get_status`.
+Leave your client running until sign-in finishes.
 
 ## Client installation
 
-These commands register the installed server with an existing client. They default
-to **user scope**, preserve unrelated settings, and create a private sibling backup
-before updating an existing file. Installing an identical entry again makes no
-change. A conflicting `apple-music` entry is rejected for you to resolve.
+The commands below add the server to your client's user settings. They leave your
+other settings alone and save a private backup beside an existing file before
+updating it. Running the same install again won't change anything. If there's
+already a different `apple-music` entry, the installer stops with an error so you
+can resolve it.
 
 | Client | Installer target | Default macOS user configuration |
 | --- | --- | --- |
@@ -147,9 +155,9 @@ change. A conflicting `apple-music` entry is rejected for you to resolve.
 | [Cursor](#cursor) | `cursor` | `~/.cursor/mcp.json` |
 | [VS Code](#vs-code) | `vscode` | `~/Library/Application Support/Code/User/mcp.json` |
 
-The generators and installers are tested against these configuration formats.
-End-to-end testing inside every client application is still outstanding. The
-installer does not install the AI client or grant tool approvals.
+The configuration formats and installers have automated tests. Testing inside
+every client app is still on the to-do list. You'll need to install the client
+itself and approve the tools there.
 
 ### Claude Code
 
@@ -157,13 +165,13 @@ installer does not install the AI client or grant tool approvals.
 .venv/bin/apple-music-mcp install claude-code
 ```
 
-Restart Claude Code and approve the server when prompted. For project scope:
+Restart Claude Code and approve the server when asked. To add it to one project:
 
 ```bash
 .venv/bin/apple-music-mcp install claude-code --scope project --project-dir /absolute/path/to/project
 ```
 
-Project scope writes `.mcp.json` in the selected project.
+That writes `.mcp.json` in the project you selected.
 
 ### Claude Desktop
 
@@ -171,8 +179,8 @@ Project scope writes `.mcp.json` in the selected project.
 .venv/bin/apple-music-mcp install claude-desktop
 ```
 
-Quit and reopen Claude Desktop so it loads the updated settings. This installer
-uses its local MCP configuration; it does not create a desktop extension bundle.
+Quit and reopen Claude Desktop to load the settings. This uses Claude's local MCP
+configuration. There isn't a desktop extension bundle yet.
 
 ### Codex
 
@@ -180,9 +188,10 @@ uses its local MCP configuration; it does not create a desktop extension bundle.
 .venv/bin/apple-music-mcp install codex
 ```
 
-Restart Codex so it loads the TOML entry. The installer honors `CODEX_HOME` if set.
-For project scope, add `--scope project --project-dir /absolute/path/to/project`;
-the destination is `.codex/config.toml` in that project.
+Restart Codex to load the TOML settings. If you've set `CODEX_HOME`, the installer
+uses it. To keep the connection in one project, add
+`--scope project --project-dir /absolute/path/to/project`. This writes
+`.codex/config.toml` inside that project.
 
 ### Gemini CLI
 
@@ -190,9 +199,9 @@ the destination is `.codex/config.toml` in that project.
 .venv/bin/apple-music-mcp install gemini-cli
 ```
 
-Restart Gemini CLI and approve the connection when prompted. For project scope,
-add `--scope project --project-dir /absolute/path/to/project`; the destination is
-`.gemini/settings.json` in that project.
+Restart Gemini CLI and approve the connection when asked. For a single project,
+add `--scope project --project-dir /absolute/path/to/project`. The installer will
+write `.gemini/settings.json` there.
 
 ### Cursor
 
@@ -200,9 +209,9 @@ add `--scope project --project-dir /absolute/path/to/project`; the destination i
 .venv/bin/apple-music-mcp install cursor
 ```
 
-Restart Cursor or reload its MCP connections and enable the server if requested.
-For project scope, add `--scope project --project-dir /absolute/path/to/project`;
-the destination is `.cursor/mcp.json` in that project.
+Restart Cursor or reload its MCP connections, then enable the server if asked.
+To use project settings, add `--scope project --project-dir /absolute/path/to/project`.
+That writes `.cursor/mcp.json` in your project.
 
 ### VS Code
 
@@ -210,48 +219,49 @@ the destination is `.cursor/mcp.json` in that project.
 .venv/bin/apple-music-mcp install vscode
 ```
 
-Reload VS Code and approve/start the MCP server when prompted. For workspace scope:
+Reload VS Code, then start and approve the server when asked. For one workspace:
 
 ```bash
 .venv/bin/apple-music-mcp install vscode --scope project --project-dir /absolute/path/to/project
 ```
 
-This writes `.vscode/mcp.json`. For an alternate editor profile or installation,
-use `--config-file /absolute/path/to/mcp.json` to select the correct destination.
+That writes `.vscode/mcp.json`. If you use another editor profile or installation,
+point the installer at its settings with `--config-file /absolute/path/to/mcp.json`.
 
 ### Preview or configure manually
 
-Preview an installation without writing settings:
+To see what an installer would add without changing your settings:
 
 ```bash
 .venv/bin/apple-music-mcp install claude-code --dry-run
 ```
 
-Print configuration to merge yourself; replace `claude-code` with any target above:
+To copy the settings yourself, use the configuration command. Replace `claude-code`
+with the client you want:
 
 ```bash
 .venv/bin/apple-music-mcp config claude-code
 .venv/bin/apple-music-mcp clients
 ```
 
-Codex output is TOML; other targets output JSON. The generated entry uses your
-absolute virtual environment Python path and credential directory. Tokens are not
-copied into client settings.
+You'll get TOML for Codex and JSON for the other clients. The output includes the
+full path to your virtual environment's Python and your credential directory.
+It doesn't copy tokens into the client's settings.
 
-The installer leaves unsupported JSON comments, trailing commas, duplicate keys,
-symbolic-link settings, and TOML structures it cannot extend safely untouched.
-Use `config` and merge the output manually in those cases. See the
-[full client setup guide](docs/clients.md) for overrides and acceptance checks.
+If your settings use JSON comments, trailing commas, duplicate keys, symbolic
+links, or a TOML structure the installer can't safely extend, it leaves the file
+alone. Use `config` and merge the output yourself. The
+[client setup guide](docs/clients.md) covers other paths and checks to run afterward.
 
 ### Other MCP clients
 
-Generate a generic stdio configuration:
+For another stdio client, start with:
 
 ```bash
 .venv/bin/apple-music-mcp config generic
 ```
 
-The result has this shape; the command fills in your actual paths:
+The command fills in your paths in an entry like this:
 
 ```json
 {
@@ -267,87 +277,93 @@ The result has this shape; the command fills in your actual paths:
 }
 ```
 
-Adapt the root structure to the client's documented format. The server exposes
-local stdio; a cloud application needs a connection that can reach your Mac.
+Check your client's documentation for the right root structure. This server uses
+local stdio, so a cloud application needs a way to reach your Mac.
 
 ### ChatGPT
 
-The existing ChatGPT connection uses OpenAI's private Secure MCP Tunnel. It has a
-separate setup and requires an active tunnel process on your Mac. Follow the
-[ChatGPT connection guide](docs/chatgpt.md), with optional
-[macOS background startup](docs/background-service.md).
+ChatGPT connects through OpenAI's private Secure MCP Tunnel, which needs to keep
+running on your Mac. Follow the [ChatGPT connection guide](docs/chatgpt.md);
+[macOS background startup](docs/background-service.md) is available if you want it
+to start at login.
 
-The local installers above do not configure ChatGPT. Hosted HTTP deployment and
-one-click plugin packages are not included in this installation flow.
+ChatGPT has its own setup, separate from the six local client installers. There
+isn't a hosted HTTP deployment or a one-click plugin package in this install flow.
 
 ## Tools
 
 | Tool | Purpose |
 | --- | --- |
-| `get_status` | Check account sign-in and optional native automation access |
-| `connect_apple_music` | Start human-completed sign-in in a local browser |
+| `get_status` | Check sign-in, and optionally permission to control Music.app |
+| `connect_apple_music` | Open a local browser so you can sign in with Apple |
 | `search_music` | Search catalog songs, albums, artists, or playlists |
-| `search_library` | Search or browse your library songs |
-| `get_song_details` | Look up one exact catalog or library song |
+| `search_library` | Find songs in your library or browse them |
+| `get_song_details` | Look up a specific song in the catalog or your library |
 | `add_songs_to_library` | Add catalog songs to your library |
-| `remove_songs_from_library` | Remove exact library songs |
+| `remove_songs_from_library` | Remove specific songs from your library |
 | `list_playlists` | List your playlists and their IDs |
-| `get_playlist_tracks` | Read ordered playlist membership |
+| `get_playlist_tracks` | Get the songs in a playlist, in order |
 | `create_playlist` | Create a playlist |
 | `update_playlist` | Rename a playlist or change its description |
 | `delete_playlist` | Delete an editable playlist |
-| `add_songs_to_playlist` | Append songs, skipping duplicates by default |
-| `remove_songs_from_playlist` | Remove playlist membership, keeping library songs |
-| `duplicate_playlist` | Copy ordered contents into a new playlist |
-| `reorder_playlist` | Reorder a native Music.app playlist with a recovery copy |
+| `add_songs_to_playlist` | Add songs at the end, skipping duplicates by default |
+| `remove_songs_from_playlist` | Take songs out of a playlist and keep them in your library |
+| `duplicate_playlist` | Copy a playlist into a new one, keeping the song order |
+| `reorder_playlist` | Change the order of a Music.app playlist and keep a recovery copy |
 | `import_audio_files` | Import local audio files into Music.app |
 
 ### Music.app access
 
-Native playlist reordering and local audio imports require Music.app. To check
-access:
+To reorder a playlist or import local audio, the server needs access to Music.app.
+Check it with:
 
 ```bash
 .venv/bin/apple-music-mcp status --native
 ```
 
-Allow the calling application to control Music when macOS requests it. Permissions
-are managed under **System Settings → Privacy & Security → Automation**. The agent
-can also check through `get_status(check_native=true)`; permission for Terminal may
-not cover the client application running your server.
+When macOS asks, allow the app running the server to control Music. You can check
+this later in System Settings → Privacy & Security → Automation. Your agent can
+also call `get_status(check_native=true)`. A permission you granted to Terminal
+may not cover your client app.
 
-The automatic backend uses web access when signed in, otherwise native access.
-`search_library`, `list_playlists`, and `create_playlist` accept `backend="native"`
-when needed. Catalog searches always use Apple's online catalog.
+By default, the server uses web access if you're signed in and native access
+otherwise. You can choose Music.app explicitly with `backend="native"` on
+`search_library`, `list_playlists`, and `create_playlist`. Catalog searches always
+use Apple's online catalog.
 
 ### IDs, pagination, and edits
 
-- **Catalog songs:** numeric IDs from `search_music`; use these for library additions.
-- **Web library songs and playlist memberships:** `i.…` IDs from the matching read tool.
-- **Web library playlists:** `p.…` IDs.
-- **Native Music.app objects:** 16-character hexadecimal persistent IDs.
+- Catalog songs have numeric IDs from `search_music`. Use those when adding to your library.
+- Web library songs and playlist memberships have `i.…` IDs from the matching read tool.
+- Web library playlists have `p.…` IDs.
+- Native Music.app objects have 16-character hexadecimal persistent IDs.
 
-Use IDs returned by the matching backend. Library removals need IDs from
-`search_library`; playlist removals need membership IDs from `get_playlist_tracks`.
-A playlist removal deletes every occurrence of the supplied membership ID.
+Keep IDs with the backend they came from. To remove a library song, use the ID
+from `search_library`. To remove it from a playlist, use the membership ID from
+`get_playlist_tracks`. Removing a playlist membership deletes every occurrence
+of that membership ID.
 
-Search/list responses include `next_offset` when another page exists; pass it back
-as `offset`. Song additions and removals accept up to 100 IDs per call. Reordering
-accepts the complete playlist order up to 20,000 IDs, including duplicates; audio
-imports accept up to 25 file paths. Tools exposing `dry_run` can preview edits;
-playlist creation and duplication do not expose it.
+If a search or list response includes `next_offset`, pass that value as `offset`
+to get the next page. Additions and removals take up to 100 song IDs per call.
+Reordering takes the full playlist order, including duplicates, up to 20,000 IDs.
+Audio imports take up to 25 file paths.
 
-Removing a song from your **library** can also remove it from playlists and synced
-devices. Removing it from a **playlist** keeps the library song. Adding songs to a
-playlist does not explicitly add them to the library; Apple Music's own settings
-may do so. Smart, special, and non-editable playlists are rejected for edits.
+You can preview an edit with `dry_run` on tools that support it. Playlist creation
+and duplication don't have a preview option.
 
-Web writes report `accepted` after Apple's success response; synchronization is
-asynchronous. Native writes read back their result. Failed or timed-out writes are
-not automatically retried. Partial failures include completed IDs: read the affected
-resource before retrying. Native imports report unconfirmed files as `unconfirmed`.
-Reordering preserves every existing occurrence and creates a recovery playlist;
-that copy remains available if verification fails.
+Removing a song from your library can also remove it from playlists and synced
+devices. Removing it from a playlist keeps it in your library. Adding songs to a
+playlist doesn't explicitly add them to your library, although your Apple Music
+settings may do that. The server won't edit smart, special, or non-editable playlists.
+
+For web edits, `accepted` means Apple accepted the request; syncing may still be
+in progress. Native edits read back the result. The server won't automatically
+retry a failed or timed-out edit. If only part of a batch succeeds, the error lists
+the completed IDs. Check the affected library or playlist before trying again.
+
+Native imports report files Music.app didn't confirm as `unconfirmed`. Playlist
+reordering keeps every existing song occurrence and creates a recovery playlist.
+If the result can't be verified, that copy stays available.
 
 ## Configuration
 
@@ -358,57 +374,59 @@ that copy remains available if verification fails.
 | `APPLE_MUSIC_DEVELOPER_TOKEN` | Optional Apple Music developer token |
 | `APPLE_MUSIC_USER_TOKEN` | Optional existing music token, overriding the saved token |
 
-Personal operations detect the signed-in account's storefront. To select a catalog
-region while installing a client:
+Your account's storefront is detected for personal library operations. To choose
+a region for catalog searches when installing a client:
 
 ```bash
 .venv/bin/apple-music-mcp install cursor --storefront gb
 ```
 
-Choose these options before the initial client install. If an existing entry has
-different settings, resolve that entry or choose a different `--name`.
+Set these options on your first install. If you've already installed an entry
+with different settings, edit that entry or pick another `--name`.
 
-To use a different credential directory, use it for both sign-in and client setup:
+If you want to save credentials elsewhere, use the same directory for sign-in
+and client setup:
 
 ```bash
 APPLE_MUSIC_MCP_HOME="$HOME/.config/apple-music-work" .venv/bin/apple-music-mcp login --web
 .venv/bin/apple-music-mcp install codex --name apple-music-work --data-dir "$HOME/.config/apple-music-work"
 ```
 
-If upgrading from a different credential directory, use `--data-dir` with its
-absolute path or sign in again. Moving the checkout or virtual environment requires
-updating the client's stored Python path.
+If an older installation saved credentials elsewhere, pass that directory's full
+path to `--data-dir` or sign in again. If you move the repository or virtual
+environment, update the Python path in your client's settings.
 
 ### Credentials and local processes
 
-Tokens belong in your local credential store or environment, never in committed
-client settings. Generated configurations contain paths and optional storefront
-selection. Private settings backups may contain secrets from other integrations;
-keep them private.
+Keep tokens in your local credential store or environment. Don't commit them in
+client settings. Generated configurations contain paths and an optional storefront.
+Settings backups can contain credentials from other integrations, so keep those
+private too.
 
-While `APPLE_MUSIC_USER_TOKEN` is set, `connect_apple_music` refuses a new sign-in
-because the environment value would override it. `get_status` reports
-`token_from_environment`.
+If you've set `APPLE_MUSIC_USER_TOKEN`, `connect_apple_music` won't start another
+sign-in: that environment value would override the new token. You can see this
+in the `token_from_environment` field returned by `get_status`.
 
-On macOS, server processes share a local lock so music edits do not overlap and
-concurrent clients reuse a sign-in flow. The native bridge passes JSON arguments
-to a fixed JXA program instead of inserting user text into executable source.
+On macOS, server processes share a local lock to keep music edits from overlapping.
+Clients also reuse a sign-in flow if one is already running. For Music.app calls,
+the native bridge passes JSON arguments to a fixed JXA program. It doesn't insert
+user text into executable source.
 
 ## Troubleshooting
 
 | Symptom | What to check |
 | --- | --- |
-| Python installation fails | Check `python3 --version`; Python 3.11 or newer is required |
-| Sign-in cannot open a browser | Install the `[browser]` extra and Chrome or Playwright Chromium |
-| Tools do not appear in the client | Reopen/reload the client, approve the server, and check the selected profile or organization policy |
-| Server cannot start | Run `doctor --probe`; verify the configured absolute Python path still exists |
-| Account is disconnected | Run `status`, then `login --web`, or ask the agent to connect Apple Music |
-| Music.app access is denied | Sign in to Music.app and check the calling app's Automation permission |
-| Installer rejects an existing entry | Resolve that entry or choose another `--name`; use `config` for manual setup |
-| Installer cannot parse settings | Comments/trailing commas or unsupported TOML may require a manual merge |
-| An edit times out or partly succeeds | Read the affected library/playlist before retrying |
+| Python installation fails | Run `python3 --version`. You need Python 3.11 or newer |
+| Sign-in cannot open a browser | Install the `[browser]` extra, then make sure you have Chrome or Playwright Chromium |
+| Tools do not appear in the client | Reopen the client or reload MCP, then approve the server. Check that you're using the right profile and that your organization allows it |
+| Server cannot start | Run `doctor --probe` and check that the Python path in your settings still exists |
+| Account is disconnected | Run `status` followed by `login --web`, or ask your agent to connect Apple Music |
+| Music.app access is denied | Check that you're signed in to Music.app and that the app running the server has Automation permission |
+| Installer rejects an existing entry | Edit that entry or choose another `--name`. Use `config` if you want to merge settings yourself |
+| Installer cannot parse settings | If the file has comments, trailing commas, or unsupported TOML, merge the settings yourself |
+| An edit times out or partly succeeds | Check the library or playlist before trying the edit again |
 
-Useful diagnostics:
+To check your setup:
 
 ```bash
 .venv/bin/apple-music-mcp doctor
@@ -416,19 +434,19 @@ Useful diagnostics:
 .venv/bin/apple-music-mcp status
 ```
 
-`doctor` checks local dependencies without reading tokens or contacting Apple.
-`doctor --probe` also starts a temporary MCP process and discovers its tools; it
-does not call music tools or change your library. `status` verifies your saved
-account access with Apple. Browser executables and Automation permissions need
-their own checks; `doctor` reports them as unchecked.
+Use `doctor` for local dependency checks. It doesn't read your tokens or contact
+Apple. With `doctor --probe`, it also starts a temporary server and lists the tools
+without calling them or changing your library. Use `status` to check account access
+with Apple. You'll still need to check the browser and Automation permissions
+separately; `doctor` reports those as unchecked.
 
-For an issue report, include your macOS/Python/client versions, the failing command,
-and the error text. Review diagnostics and logs for private paths or account data
-before sharing. Never include tokens or `credentials.json`.
+If you open an issue, include your macOS, Python, and client versions, along with
+the command you ran and the error. Check logs and diagnostics for private paths or
+account data before posting them. Don't share tokens or `credentials.json`.
 
 ## Updating and removing
 
-To update an existing checkout, stop its client connections first, then run:
+Stop your clients' connections before updating, then run:
 
 ```bash
 git pull --ff-only
@@ -436,20 +454,22 @@ git pull --ff-only
 .venv/bin/apple-music-mcp doctor --probe
 ```
 
-Reopen your clients afterward. Unchanged Python/credential paths do not require
-reinstallation of their settings.
+Reopen your clients afterward. You only need to reinstall their settings if the
+Python or credential paths have changed.
 
-To disconnect a client, remove its `apple-music` entry from the configuration shown
-above and reload the client. Once all clients are disconnected, you can delete the
-checkout and virtual environment. To remove this server's saved music token first:
+To disconnect a client, remove its `apple-music` entry from the settings file listed
+above and reload the client. After disconnecting all clients, you can delete the
+repository and virtual environment. If you also want to remove the saved music
+token, run this first:
 
 ```bash
 .venv/bin/apple-music-mcp logout
 ```
 
-`logout` removes local saved tokens; it does not change an environment-supplied token
-or promise to revoke account authorization at Apple. ChatGPT background service
-removal has [separate instructions](docs/background-service.md).
+`logout` removes locally saved tokens. It won't change a token supplied through
+your environment, and it doesn't guarantee that Apple revokes the account's
+authorization. If you set up the ChatGPT background service, follow its
+[removal instructions](docs/background-service.md) as well.
 
 ## Development
 
@@ -460,15 +480,15 @@ removal has [separate instructions](docs/background-service.md).
 .venv/bin/ruff format --check src scripts tests
 ```
 
-The automated suite checks tool schemas, IDs, protected playlists, dry runs,
-pagination, duplicate detection, partial failures, timeouts, credential handling,
-sign-in, process locking, client settings, and background startup. Tests do not
-modify a real music library; some bind temporary localhost ports. Client format
-tests and a successful MCP probe do not replace testing inside each client app.
+Tests cover tool schemas, IDs, protected playlists, dry runs, pagination, duplicate
+detection, partial failures, timeouts, credentials, sign-in, process locking, client
+settings, and background startup. They don't modify a real music library. Some
+need to bind temporary localhost ports. Client format tests and the MCP probe
+check the server and settings; testing inside each client app is a separate step.
 
-`requirements.lock` and `requirements-browser.lock` capture the original tested
-Python environment. To reproduce it, install the appropriate lock file followed by
-this package with `--no-deps -e .`.
+To reproduce the original tested Python environment, install
+`requirements.lock` or `requirements-browser.lock`, then install this package
+with `--no-deps -e .`.
 
 ```text
 src/apple_music_mcp/    FastMCP tools, web API, native bridge, sign-in, and client setup
@@ -477,8 +497,8 @@ tests/                 Automated tests
 docs/                  Client setup, ChatGPT connection, and background service guides
 ```
 
-Credentials, API keys, browser profiles, logs, virtual environments, screenshots,
-and the vendor tunnel binary are excluded from version control.
+The repository's ignore rules exclude credentials, API keys, browser profiles,
+logs, virtual environments, screenshots, and the vendor tunnel binary.
 
 ## Documentation and acknowledgments
 
@@ -489,7 +509,7 @@ and the vendor tunnel binary are excluded from version control.
 - [Apple Music API](https://developer.apple.com/documentation/applemusicapi)
 - [MusicKit authentication](https://developer.apple.com/documentation/applemusicapi/user-authentication-for-musickit)
 
-The web-player endpoint behavior was checked against
+The web API's endpoint behavior was checked against
 [epheterson/applemusic-mcp](https://github.com/epheterson/applemusic-mcp/blob/main/src/applemusic_mcp/amp_api.py).
-Direct web sign-in follows the token mechanism in its
+Browser sign-in uses the token mechanism from its
 [browser authentication implementation](https://github.com/epheterson/applemusic-mcp/blob/main/src/applemusic_mcp/browser.py).
