@@ -31,6 +31,35 @@ Use `--name apple-music` to customize the server entry. Names use lowercase lett
 digits, and hyphens to avoid client namespace ambiguities. Generated configurations
 do not disable tool confirmations or mark the server universally trusted.
 
+## Install into a client
+
+```bash
+apple-music-mcp install claude-code --dry-run
+apple-music-mcp install claude-code
+apple-music-mcp install codex
+apple-music-mcp install gemini-cli
+apple-music-mcp install claude-desktop
+apple-music-mcp install cursor
+apple-music-mcp install vscode --scope project
+```
+
+Installation defaults to user scope. `--scope project --project-dir /path/to/project`
+selects project settings for clients that support them. `--config-file /path/to/settings`
+overrides the destination, including alternate editor profiles and generic clients.
+`CODEX_HOME` is honored for Codex user settings. Quit the client before editing its
+configuration so it does not overwrite your changes on exit.
+
+The installer preserves unrelated settings and creates a private sibling backup
+before replacing an existing file. It prints the backup path without printing
+existing settings. Repeating the same install makes no change. A conflicting server
+name is rejected; edit/remove that entry in the client or choose another `--name`.
+It does not install the AI client itself or grant tool approvals.
+
+JSON with comments, trailing commas, duplicate keys, and TOML structures that cannot
+be safely extended are left untouched. For those files, use `config` and merge the
+entry in your editor. Symbolic-link settings require an explicit real file path.
+Keep backups private: they may contain credentials belonging to other integrations.
+
 ## Configuration formats
 
 Merge the generated entry into existing configuration instead of replacing the

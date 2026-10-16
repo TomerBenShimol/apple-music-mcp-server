@@ -88,6 +88,8 @@ this package:
 
 The command prints JSON (TOML for Codex), with an absolute Python path and a shared
 credential directory. It does not change client settings or export tokens.
+Use `apple-music-mcp install <client> --dry-run` to preview installation, then omit
+`--dry-run` to merge the entry with a backup of any existing settings.
 See [local client setup](docs/clients.md) for all targets and configuration locations.
 
 ## Hermes example
