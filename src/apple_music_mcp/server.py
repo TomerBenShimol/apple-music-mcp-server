@@ -15,7 +15,7 @@ from pydantic import Field
 from .api import MusicAPI
 from .auth import MusicError
 from .locking import MusicEditLock
-from .native import NATIVE_ID, NativeMusic
+from .native import NATIVE_ID, NativeMusic, recovery_name
 from .signin import SignInManager
 
 PageSize = Annotated[int, Field(ge=1, le=100)]
@@ -361,7 +361,13 @@ def create_server(service: MusicService | None = None) -> FastMCP:
             )
         ids = [service.native.validate_id(i) for i in ordered_song_ids]
         with service.lock:
-            return service.native.call("reorder", id=playlist_id, track_ids=ids, dry_run=dry_run)
+            return service.native.call(
+                "reorder",
+                id=playlist_id,
+                track_ids=ids,
+                dry_run=dry_run,
+                backup_name=recovery_name(playlist_id),
+            )
 
     @mcp.tool(annotations=WRITE)
     @user_errors

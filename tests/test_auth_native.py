@@ -248,3 +248,64 @@ def test_native_write_timeout_warns_about_uncertain_outcome(monkeypatch):
     monkeypatch.setattr("apple_music_mcp.native.subprocess.run", timeout)
     with pytest.raises(MusicError, match="outcome is uncertain"):
         NativeMusic().call("remove_library", track_ids=["0123456789ABCDEF"])
+
+
+def native_ids(count):
+    return [f"{i:016X}" for i in range(count)]
+
+
+def capture_timeouts(monkeypatch):
+    seen = []
+
+    def run(command, **kwargs):
+        seen.append(kwargs["timeout"])
+        return subprocess.CompletedProcess(command, 0, "{}", "")
+
+    monkeypatch.setattr("apple_music_mcp.native.sys.platform", "darwin")
+    monkeypatch.setattr("apple_music_mcp.native.subprocess.run", run)
+    return seen
+
+
+def test_native_timeout_grows_with_the_batch_and_stays_bounded(monkeypatch):
+    seen = capture_timeouts(monkeypatch)
+    music = NativeMusic()
+    music.call("search", query="x")
+    music.call("reorder", id="0123456789ABCDEF", track_ids=native_ids(200), backup_name="b")
+    music.call("reorder", id="0123456789ABCDEF", track_ids=native_ids(20000), backup_name="b")
+    assert seen == [25.0, 225.0, 1800.0]
+
+
+def test_reorder_timeout_names_the_recovery_playlist(monkeypatch):
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], 25)
+
+    monkeypatch.setattr("apple_music_mcp.native.sys.platform", "darwin")
+    monkeypatch.setattr("apple_music_mcp.native.subprocess.run", timeout)
+    with pytest.raises(MusicError, match="saved in playlist 'MCP recovery X 1'"):
+        NativeMusic().call(
+            "reorder",
+            id="0123456789ABCDEF",
+            track_ids=native_ids(2),
+            backup_name="MCP recovery X 1",
+        )
+
+
+def test_failed_native_write_is_marked_uncertain_and_keeps_progress(monkeypatch):
+    def fail(command, **kwargs):
+        return subprocess.CompletedProcess(command, 1, "", 'Error: boom Completed removals: ["A"]')
+
+    monkeypatch.setattr("apple_music_mcp.native.sys.platform", "darwin")
+    monkeypatch.setattr("apple_music_mcp.native.subprocess.run", fail)
+    with pytest.raises(MusicError, match="outcome is uncertain.*Completed removals"):
+        NativeMusic().call("remove_library", track_ids=native_ids(2))
+
+
+def test_failed_native_read_is_not_marked_uncertain(monkeypatch):
+    monkeypatch.setattr("apple_music_mcp.native.sys.platform", "darwin")
+    monkeypatch.setattr(
+        "apple_music_mcp.native.subprocess.run",
+        lambda command, **kw: subprocess.CompletedProcess(command, 1, "", "Error: boom"),
+    )
+    with pytest.raises(MusicError) as error:
+        NativeMusic().call("search", query="x")
+    assert "uncertain" not in str(error.value)

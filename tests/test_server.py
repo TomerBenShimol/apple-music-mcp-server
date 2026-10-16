@@ -106,3 +106,14 @@ async def test_next_offset_past_20000_is_accepted(service):
     async with Client(create_server(service)) as client:
         await client.call_tool("search_library", {"offset": 20100})
     service.api.search_library.assert_called_once_with("", 50, 20100)
+
+
+async def test_reorder_names_a_recovery_playlist_for_the_native_call(service):
+    service.native.call.return_value = {"changed": False}
+    async with Client(create_server(service)) as client:
+        await client.call_tool(
+            "reorder_playlist",
+            {"playlist_id": "0123456789ABCDEF", "ordered_song_ids": ["00000000000000AA"]},
+        )
+    kwargs = service.native.call.call_args.kwargs
+    assert kwargs["backup_name"].startswith("MCP recovery 0123456789ABCDEF ")
