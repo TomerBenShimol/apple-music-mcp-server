@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from apple_music_mcp.api import MusicAPI, next_offset
+from apple_music_mcp.api import REJECTED, MusicAPI, next_offset
 from apple_music_mcp.auth import Credentials, MusicError, TransientMusicError
 
 
@@ -324,3 +324,55 @@ def test_rate_limit_is_transient(api_factory):
     api = api_factory(routed(("GET", "", lambda r: httpx.Response(429))))
     with pytest.raises(TransientMusicError, match="rate-limited"):
         api.request("GET", "/v1/catalog/us/search", personal=False)
+
+
+class SwitchableCredentials(FakeCredentials):
+    def __init__(self, root, token):
+        super().__init__(root)
+        self.token = token
+
+    def user_token(self):
+        return self.token
+
+
+def test_stale_sign_in_does_not_break_catalog_search(api_factory, monkeypatch):
+    monkeypatch.delenv("APPLE_MUSIC_STOREFRONT", raising=False)
+    searched = []
+
+    def search(request):
+        searched.append(request.url.path)
+        return httpx.Response(200, json={"results": {"songs": {"data": [make_song("123")]}}})
+
+    api = api_factory(routed(("GET", "/storefront", answer(401)), ("GET", "/search", search)))
+    result = api.search_catalog("Daft Punk", "songs", 10, 0)
+    assert result["storefront"] == "us" and len(result["items"]) == 1
+    assert searched == ["/v1/catalog/us/search"]
+
+
+def test_storefront_follows_the_signed_in_account(tmp_path, monkeypatch):
+    monkeypatch.delenv("APPLE_MUSIC_STOREFRONT", raising=False)
+    stores = {"a" * 40: "us", "b" * 40: "il"}
+
+    def storefront(request):
+        store = stores[request.headers["Music-User-Token"]]
+        return httpx.Response(200, json={"data": [{"id": store}]})
+
+    credentials = SwitchableCredentials(tmp_path, "a" * 40)
+    transport = httpx.MockTransport(routed(("GET", "/storefront", storefront)))
+    api = MusicAPI(credentials, httpx.Client(transport=transport))
+    assert api.resolve_storefront() == "us"
+    credentials.token = "b" * 40
+    assert api.resolve_storefront() == "il"
+    credentials.token = None
+    assert api.resolve_storefront() == "us"
+
+
+def test_strict_storefront_lookup_reports_a_rejected_token(api_factory):
+    api = api_factory(routed(("GET", "/storefront", answer(401))))
+    with pytest.raises(MusicError, match="rejected access"):
+        api.resolve_storefront(strict=True)
+
+
+def test_check_access_reports_errors_without_raising(api_factory):
+    api = api_factory(routed(("GET", "/storefront", answer(401))))
+    assert api.check_access() == {"web_accessible": False, "web_error": REJECTED}

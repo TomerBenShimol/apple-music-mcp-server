@@ -32,6 +32,7 @@ REJECTED = (
 )
 NOT_FOUND = "Apple Music could not find this resource in this account/storefront."
 UNCERTAIN_WRITE = " The write outcome is uncertain; inspect the library before retrying."
+UNRESOLVED = object()
 
 
 def validate_path(path: str) -> None:
@@ -136,7 +137,8 @@ class MusicAPI:
         self.storefront = os.environ.get("APPLE_MUSIC_STOREFRONT", "us").lower()
         if not re.fullmatch(r"[a-z]{2}", self.storefront):
             raise MusicError("APPLE_MUSIC_STOREFRONT must be a two-letter country code.")
-        self._storefront_resolved = False
+        self.default_storefront = self.storefront
+        self._storefront_token: object = UNRESOLVED
 
     def request(
         self,
@@ -181,13 +183,36 @@ class MusicAPI:
             suffix = UNCERTAIN_WRITE if method != "GET" else ""
             raise TransientMusicError("Could not reach Apple Music." + suffix) from exc
 
-    def resolve_storefront(self) -> str:
-        if not self._storefront_resolved and self.credentials.user_token():
-            data = self.request("GET", "/v1/me/storefront").get("data", [])
-            if data and re.fullmatch(r"[a-z]{2}", data[0].get("id", "")):
-                self.storefront = data[0]["id"]
-            self._storefront_resolved = True
+    def resolve_storefront(self, *, strict: bool = False) -> str:
+        """The signed-in account's storefront, looked up again whenever the saved token changes.
+
+        Catalog reads use strict=False, so a stale token falls back to the configured
+        storefront instead of failing a search that needs no sign-in.
+        """
+        token = self.credentials.user_token()
+        if token == self._storefront_token:
+            return self.storefront
+        try:
+            self.storefront = self.account_storefront() if token else self.default_storefront
+        except MusicError:
+            if strict:
+                raise
+            return self.default_storefront
+        self._storefront_token = token
         return self.storefront
+
+    def account_storefront(self) -> str:
+        data = self.request("GET", "/v1/me/storefront").get("data", [])
+        found = data[0].get("id", "") if data else ""
+        return found if re.fullmatch(r"[a-z]{2}", found) else self.default_storefront
+
+    def check_access(self) -> dict:
+        try:
+            storefront = self.resolve_storefront(strict=True)
+            self.request("GET", "/v1/me/library/songs", params={"limit": 1})
+        except MusicError as exc:
+            return {"web_accessible": False, "web_error": str(exc)}
+        return {"web_accessible": True, "storefront": storefront}
 
     def search_catalog(self, query: str, kind: str, limit: int, offset: int) -> dict:
         store = self.resolve_storefront()

@@ -78,6 +78,12 @@ class NativeMusic:
                 "Music returned an unreadable result. Inspect Music before retrying."
             ) from exc
 
+    def check_access(self) -> dict:
+        try:
+            return self.call("status")
+        except MusicError as exc:
+            return {"accessible": False, "error": str(exc)}
+
     @staticmethod
     def validate_id(value: str) -> str:
         if not NATIVE_ID.fullmatch(value):

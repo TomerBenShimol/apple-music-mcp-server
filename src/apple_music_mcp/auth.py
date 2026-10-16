@@ -152,7 +152,7 @@ def verify_user_token(credentials: Credentials, token: str, *, web: bool) -> str
 
     with httpx.Client(timeout=20) as client:
         api = MusicAPI(CandidateCredentials(credentials.root), client)
-        storefront = api.resolve_storefront()
+        storefront = api.resolve_storefront(strict=True)
         api.request("GET", "/v1/me/library/songs", params={"limit": 1})
         return storefront
 

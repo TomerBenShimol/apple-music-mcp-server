@@ -65,18 +65,8 @@ def main() -> None:
         elif args.command == "status":
             api = MusicAPI()
             result = {"web_signed_in": bool(api.credentials.user_token()), "web_accessible": False}
-            if result["web_signed_in"]:
-                try:
-                    result["storefront"] = api.resolve_storefront()
-                    api.request("GET", "/v1/me/library/songs", params={"limit": 1})
-                    result["web_accessible"] = True
-                except MusicError as exc:
-                    result["web_error"] = str(exc)
-            if args.native:
-                try:
-                    result["native"] = NativeMusic().call("status")
-                except MusicError as exc:
-                    result["native"] = {"accessible": False, "error": str(exc)}
+            result.update(api.check_access() if result["web_signed_in"] else {})
+            result.update({"native": NativeMusic().check_access()} if args.native else {})
             print(json.dumps(result, indent=2))
             if not result["web_accessible"] and not result.get("native", {}).get("accessible"):
                 sys.exit(1)

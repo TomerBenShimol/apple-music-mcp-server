@@ -124,18 +124,8 @@ def create_server(service: MusicService | None = None) -> FastMCP:
             "login_tool": "connect_apple_music",
             "sign_in": service.signin.status(),
         }
-        if signed_in:
-            try:
-                result["storefront"] = service.api.resolve_storefront()
-                service.api.request("GET", "/v1/me/library/songs", params={"limit": 1})
-                result["web_accessible"] = True
-            except MusicError as exc:
-                result["web_error"] = str(exc)
-        if check_native:
-            try:
-                result["native"] = service.native.call("status")
-            except MusicError as exc:
-                result["native"] = {"accessible": False, "error": str(exc)}
+        result.update(service.api.check_access() if signed_in else {})
+        result.update({"native": service.native.check_access()} if check_native else {})
         return result
 
     @mcp.tool(annotations=WRITE)
