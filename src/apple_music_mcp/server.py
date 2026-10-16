@@ -49,6 +49,22 @@ def nonblank(value: str, label: str) -> str:
     return value.strip()
 
 
+def checked_description(value: str) -> str:
+    if len(value) > 5000:
+        raise MusicError("Description must be at most 5,000 characters.")
+    return value
+
+
+def playlist_changes(name: str | None, description: str | None) -> dict:
+    changes = {
+        **({"name": nonblank(name, "Playlist name")} if name is not None else {}),
+        **({"description": checked_description(description)} if description is not None else {}),
+    }
+    if not changes:
+        raise MusicError("Supply a name and/or description.")
+    return changes
+
+
 class MusicService:
     def __init__(
         self,
@@ -225,8 +241,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
     def create_playlist(name: Name, description: str = "", backend: Backend = "auto") -> dict:
         """Create a normal library playlist and return its new ID."""
         name = nonblank(name, "Playlist name")
-        if len(description) > 5000:
-            raise MusicError("Description must be at most 5,000 characters.")
+        description = checked_description(description)
         with service.lock:
             if service.use_web(backend):
                 return service.api.create_playlist(name, description)
@@ -241,24 +256,10 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         dry_run: bool = False,
     ) -> dict:
         """Rename a playlist and/or update its description. Protected playlists are rejected."""
-        changes = {}
-        if name is not None:
-            changes["name"] = nonblank(name, "Playlist name")
-        if description is not None:
-            if len(description) > 5000:
-                raise MusicError("Description must be at most 5,000 characters.")
-            changes["description"] = description
-        if not changes:
-            raise MusicError("Supply a name and/or description.")
+        changes = playlist_changes(name, description)
         with service.lock:
             if NATIVE_ID.fullmatch(playlist_id):
-                if dry_run:
-                    return {
-                        "dry_run": True,
-                        "before": service.native.call("playlist", id=playlist_id),
-                        "changes": changes,
-                    }
-                return service.native.call("update", id=playlist_id, **changes)
+                return service.native.call("update", id=playlist_id, dry_run=dry_run, **changes)
             return service.api.update_playlist(playlist_id, changes, dry_run)
 
     @mcp.tool(annotations=DELETE)

@@ -117,3 +117,22 @@ async def test_reorder_names_a_recovery_playlist_for_the_native_call(service):
         )
     kwargs = service.native.call.call_args.kwargs
     assert kwargs["backup_name"].startswith("MCP recovery 0123456789ABCDEF ")
+
+
+async def test_native_update_dry_run_goes_through_the_writable_check(service):
+    service.native.call.return_value = {"dry_run": True}
+    async with Client(create_server(service)) as client:
+        await client.call_tool(
+            "update_playlist",
+            {"playlist_id": "0123456789ABCDEF", "name": "X", "dry_run": True},
+        )
+    service.native.call.assert_called_once_with(
+        "update", id="0123456789ABCDEF", dry_run=True, name="X"
+    )
+
+
+async def test_update_without_changes_is_rejected_before_any_backend(service):
+    async with Client(create_server(service)) as client:
+        with pytest.raises(ToolError, match="name and/or description"):
+            await client.call_tool("update_playlist", {"playlist_id": "p.web"})
+    service.api.update_playlist.assert_not_called()

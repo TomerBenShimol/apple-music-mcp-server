@@ -37,6 +37,13 @@ function run(argv) {
         if (JSON.stringify(actual) !== JSON.stringify(expected))
             throw Error('Music did not retain the requested playlist contents. Read the playlist before retrying.');
     }
+    function newPlaylist(props) { return m.make({new: 'userPlaylist', withProperties: props}); }
+    // Apple Events are not transactional: report what already happened if a later one fails.
+    function each(items, act, label) {
+        const done = [];
+        try { items.forEach((item, i) => { act(item, i); done.push(item); }); }
+        catch (e) { throw Error(String(e) + ' ' + label + ': ' + JSON.stringify(done)); }
+    }
     switch (op) {
         case 'status':
             return JSON.stringify({version: m.version(), library_tracks: library().tracks.length,
@@ -50,12 +57,13 @@ function run(argv) {
         case 'playlist': return JSON.stringify(info(playlist(a.id, false)));
         case 'playlist_tracks': return JSON.stringify(page(playlist(a.id, false).tracks(), song));
         case 'create': {
-            const p = m.make({new: 'user playlist', withProperties:
-                {name: a.name, description: a.description || ''}});
+            const p = newPlaylist({name: a.name, description: a.description || ''});
             return JSON.stringify(info(p));
         }
         case 'update': {
             const p = playlist(a.id, true);
+            if (a.dry_run) return JSON.stringify({dry_run: true, before: info(p),
+                changes: {name: a.name, description: a.description}});
             if (a.name !== undefined) p.name = a.name;
             if (a.description !== undefined) p.description = a.description;
             const result = info(p);
@@ -77,7 +85,7 @@ function run(argv) {
             const wanted = a.track_ids.filter(id => !a.skip_duplicates || before.indexOf(id) < 0);
             const tracks = wanted.map(id => track(id)); // Resolve all before writing.
             if (a.dry_run) return JSON.stringify({dry_run: true, adding: tracks.map(song)});
-            tracks.forEach(t => m.duplicate(t, {to: p}));
+            each(wanted, (id, i) => m.duplicate(tracks[i], {to: p}), 'Completed additions');
             assertIDs(p, before.concat(wanted));
             return JSON.stringify({playlist_id: a.id, added: wanted, skipped: a.track_ids.length - wanted.length});
         }
@@ -87,15 +95,17 @@ function run(argv) {
             const removed = before.filter(id => a.track_ids.indexOf(id) >= 0);
             if (a.dry_run) return JSON.stringify({dry_run: true, removing: removed});
             // Delete playlist-scoped references, in reverse order, preserving library tracks.
+            const positions = [];
             for (let i = before.length - 1; i >= 0; --i)
-                if (a.track_ids.indexOf(before[i]) >= 0) m.delete(p.tracks[i]);
+                if (a.track_ids.indexOf(before[i]) >= 0) positions.push(i);
+            each(positions, i => m.delete(p.tracks[i]), 'Removed playlist positions');
             assertIDs(p, before.filter(id => a.track_ids.indexOf(id) < 0));
             return JSON.stringify({playlist_id: a.id, removed: removed});
         }
         case 'remove_library': {
             const targets = a.track_ids.map(id => track(id)), before = targets.map(song);
             if (a.dry_run) return JSON.stringify({dry_run: true, removing: before});
-            targets.forEach(t => m.delete(t));
+            each(a.track_ids, (id, i) => m.delete(targets[i]), 'Completed removals');
             a.track_ids.forEach(id => {
                 if (library().tracks.whose({persistentID: id})().length)
                     throw Error('Music did not remove track ' + id + '. Inspect library before retrying.');
@@ -104,7 +114,8 @@ function run(argv) {
         }
         case 'import': {
             const results = m.add(a.paths.map(path => Path(path)));
-            return JSON.stringify({added: (Array.isArray(results) ? results : [results]).map(song)});
+            const added = (Array.isArray(results) ? results : [results]).filter(t => t);
+            return JSON.stringify({added: added.map(song), unconfirmed: a.paths.length - added.length});
         }
         case 'reorder': {
             const p = playlist(a.id, true), before = ids(p), wanted = a.track_ids;
@@ -115,10 +126,14 @@ function run(argv) {
             if (JSON.stringify(before) === JSON.stringify(wanted))
                 return JSON.stringify({playlist_id: a.id, changed: false});
             // Keep a recoverable native copy until the complete rewrite verifies.
-            const backup = m.make({new: 'user playlist', withProperties:
-                {name: 'MCP recovery ' + a.id + ' ' + Date.now()}});
-            p.tracks().forEach(t => m.duplicate(t, {to: backup}));
-            assertIDs(backup, before);
+            const backup = newPlaylist({name: a.backup_name || ('MCP recovery ' + a.id + ' ' + Date.now())});
+            try {
+                p.tracks().forEach(t => m.duplicate(t, {to: backup}));
+                assertIDs(backup, before);
+            } catch (e) {
+                m.delete(backup);
+                throw Error(String(e) + ' The playlist was not changed.');
+            }
             try {
                 for (let i = before.length - 1; i >= 0; --i) m.delete(p.tracks[i]);
                 resolved.forEach(t => m.duplicate(t, {to: p}));

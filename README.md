@@ -209,8 +209,9 @@ Smart, special, and non-editable playlists are rejected for edits.
 
 Web writes report `accepted` after an Apple success response, because library/device
 sync is asynchronous. Native writes read back the resulting state. A failed or timed
-out write is never automatically retried. If a partial batch succeeds, its completed
-IDs are included in the error; read the resource before retrying. Reordering checks
+out write is never automatically retried. If a partial batch succeeds, its completed IDs are included in the error, on the web and
+native backends alike; read the resource before retrying. Native imports report how many
+files Music did not confirm as `unconfirmed`. Reordering checks
 that every existing occurrence is retained and saves a recovery playlist before
 rewriting; if verification fails, that recovery copy remains in Music.
 
