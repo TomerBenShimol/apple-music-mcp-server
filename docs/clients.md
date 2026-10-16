@@ -83,6 +83,38 @@ Reload MCP connections or restart the client after configuration. Approve the se
 when the client requests it. Ask for account status or a catalog search first, then
 complete Apple Music sign-in before library edits.
 
+## Diagnose setup
+
+```bash
+apple-music-mcp doctor
+apple-music-mcp doctor --probe
+apple-music-mcp status
+```
+
+`doctor` checks this Python environment and reports dependency versions, optional
+browser support, and native-backend availability. It does not read saved tokens or
+contact Apple. Browser executables and macOS Automation permission are explicitly
+reported as unchecked. If using `config --python`, run diagnostics through that
+interpreter: `/path/to/python -m apple_music_mcp doctor --probe`.
+
+`--probe` starts a temporary stdio server, initializes an MCP connection, and lists
+tools. It does not call music tools, open a sign-in browser, or modify the library.
+A successful probe verifies the server runtime, not integration inside every client.
+Use `status` separately to verify the Apple Music account over the network.
+
+For each client, complete these acceptance checks after installing:
+
+1. Reload the client and confirm that Apple Music tools appear.
+2. Ask for a catalog search and inspect the returned song IDs.
+3. Check account status and complete sign-in if needed.
+4. Preview a library addition with `dry_run=true` before an explicitly requested edit.
+5. Restart the client and confirm the connection and saved sign-in still work.
+
+If an entry cannot launch, check its absolute Python path and dependencies. If tools
+do not appear, check client approvals, organization policies, or the selected profile.
+If Apple Music needs sign-in, use `connect_apple_music` or `login --web`; MCP
+configuration does not itself authorize an Apple Music account.
+
 ## Compatibility boundaries
 
 The configuration generators are tested against their documented formats. Actual

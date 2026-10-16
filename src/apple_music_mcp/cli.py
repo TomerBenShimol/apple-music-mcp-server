@@ -14,6 +14,7 @@ import httpx
 from .api import MusicAPI
 from .auth import Credentials, MusicError, login_server
 from .clients import add_commands, list_clients, show_config
+from .doctor import add_doctor_command, doctor
 from .install import add_install_command, install_client
 from .native import NativeMusic
 
@@ -41,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("logout", help="Remove this server's locally stored music access token")
     add_commands(commands)
     add_install_command(commands)
+    add_doctor_command(commands)
     return parser
 
 
@@ -111,6 +113,7 @@ COMMANDS: dict[str | None, Callable] = {
     "clients": list_clients,
     "config": show_config,
     "install": install_client,
+    "doctor": doctor,
 }
 
 

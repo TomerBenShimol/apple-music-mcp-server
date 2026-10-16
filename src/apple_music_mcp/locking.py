@@ -1,4 +1,4 @@
-"""Serialize edits across the Hermes and ChatGPT MCP processes on this Mac."""
+"""Serialize edits across local MCP client processes."""
 
 from __future__ import annotations
 

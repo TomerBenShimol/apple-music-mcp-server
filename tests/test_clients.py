@@ -35,6 +35,15 @@ def test_virtualenv_python_symlink_is_preserved(tmp_path):
     assert "APPLE_MUSIC_STOREFRONT" not in entry["env"]
 
 
+def test_codex_config_preserves_unicode_paths_without_invalid_surrogate_escapes(tmp_path):
+    interpreter = tmp_path / "music 🎵/python"
+    interpreter.parent.mkdir()
+    interpreter.symlink_to(sys.executable)
+    entry = server_entry("codex", interpreter, tmp_path / "library 🎵", None)
+    decoded = tomllib.loads(render_config("codex", "apple-music", entry))
+    assert decoded["mcp_servers"]["apple-music"] == entry
+
+
 @pytest.mark.parametrize("name", ["has_underscore", "bad.name", "../name", "a" * 49])
 def test_invalid_server_name_cannot_create_nested_tables(name):
     with pytest.raises(MusicError, match="server name"):

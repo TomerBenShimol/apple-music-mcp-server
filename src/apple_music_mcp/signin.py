@@ -54,7 +54,7 @@ class SignInManager:
             try:
                 fd = self._acquire(create=False)
             except BlockingIOError:
-                return state  # Another Hermes/ChatGPT process owns the sign-in.
+                return state  # Another MCP client process owns the sign-in.
             except FileNotFoundError:
                 pass
             else:

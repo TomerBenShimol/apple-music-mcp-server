@@ -84,6 +84,7 @@ this package:
 .venv/bin/apple-music-mcp config claude-code
 .venv/bin/apple-music-mcp config codex
 .venv/bin/apple-music-mcp config gemini-cli
+.venv/bin/apple-music-mcp doctor --probe
 ```
 
 The command prints JSON (TOML for Codex), with an absolute Python path and a shared
@@ -211,7 +212,7 @@ to preview additions, removals, or updates before changing anything.
 The default backend is web when signed in, otherwise native. Choose `backend="native"`
 on `search_library`, `list_playlists`, or `create_playlist` when needed. Catalog search
 always uses Apple’s online catalog. The user's storefront is detected after sign-in;
-Hermes uses Israel (`il`) for unauthenticated catalog search on this installation.
+set `APPLE_MUSIC_STOREFRONT` to choose a catalog region before sign-in (default `us`).
 
 ### IDs matter
 
@@ -257,7 +258,7 @@ configuration committed to this repository.
 
 The native backend is a fixed JXA program called by Python with JSON arguments;
 user strings are never interpolated into executable source. On macOS, concurrent
-Hermes and ChatGPT processes share a local edit lock so music mutations do not overlap.
+MCP client processes on POSIX systems share a local edit lock so music mutations do not overlap.
 
 ## Development
 

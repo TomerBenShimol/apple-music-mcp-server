@@ -197,7 +197,7 @@ def login_server(credentials: Credentials, developer_token: str) -> tuple[HTTPSe
 padding:28px}button{font:inherit;border:0;border-radius:12px;padding:15px 24px;background:#fa365e;
 color:white;cursor:pointer}small{color:#aaa}#status{white-space:pre-wrap;line-height:1.6}</style>
 <h1>Connect your Apple Music</h1>
-<p>Sign in with Apple to let your Hermes agent manage your music library and playlists.</p>
+<p>Sign in with Apple to let your AI assistant manage your music library and playlists.</p>
 <p>Your password stays with Apple. This local server stores only the music access token.</p>
 <button id="connect" disabled>Connect Apple Music</button><p id="status">Loading MusicKit…</p>
 <small>You can close this page after the connection succeeds.</small>
@@ -217,7 +217,7 @@ button.onclick = async () => {
     const response = await fetch(CALLBACK, {method: 'POST',
       headers: {'Content-Type':'application/json'}, body: JSON.stringify({token})});
     if (!response.ok) throw new Error(await response.text());
-    status.textContent = 'Connected. Hermes can now add catalog songs to your library.';
+    status.textContent = 'Connected. Your AI assistant can now add songs to your library.';
     button.textContent = 'Connected';
   } catch (error) { status.textContent = 'Sign-in did not complete: ' + error.message;
     button.disabled = false; }

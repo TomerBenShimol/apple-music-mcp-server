@@ -24,7 +24,7 @@ AUTOMATION = (
 )
 DENIED = (
     "Music automation access is denied. Enable it in macOS Settings → "
-    "Privacy & Security → Automation for the app running Hermes."
+    "Privacy & Security → Automation for the app running this MCP server."
 )
 
 

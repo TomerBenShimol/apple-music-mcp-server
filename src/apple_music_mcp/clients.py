@@ -70,10 +70,12 @@ def configuration(client: str, name: str, entry: dict) -> dict:
 
 def toml_config(name: str, entry: dict) -> str:
     table = f"mcp_servers.{json.dumps(checked_name(name))}"
-    lines = [f"[{table}]", f"command = {json.dumps(entry['command'])}"]
+    lines = [f"[{table}]", f"command = {json.dumps(entry['command'], ensure_ascii=False)}"]
     lines.append(f"args = {json.dumps(entry['args'])}")
     lines.extend(["", f"[{table}.env]"])
-    lines.extend(f"{key} = {json.dumps(value)}" for key, value in entry["env"].items())
+    lines.extend(
+        f"{key} = {json.dumps(value, ensure_ascii=False)}" for key, value in entry["env"].items()
+    )
     return "\n".join(lines) + "\n"
 
 
