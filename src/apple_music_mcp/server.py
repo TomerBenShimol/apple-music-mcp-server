@@ -20,7 +20,8 @@ from .signin import SignInManager
 
 PageSize = Annotated[int, Field(ge=1, le=100)]
 SearchSize = Annotated[int, Field(ge=1, le=25)]
-Offset = Annotated[int, Field(ge=0, le=20000)]
+MAX_OFFSET = 200_000
+Offset = Annotated[int, Field(ge=0, le=MAX_OFFSET)]
 SongIDs = Annotated[list[str], Field(min_length=1, max_length=100)]
 Name = Annotated[str, Field(min_length=1, max_length=256)]
 Query = Annotated[str, Field(min_length=1, max_length=200)]

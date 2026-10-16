@@ -98,3 +98,11 @@ async def test_status_says_when_the_environment_supplies_the_token(service):
     async with Client(create_server(service)) as client:
         result = await client.call_tool("get_status", {})
     assert result.data["token_from_environment"] is True
+
+
+async def test_next_offset_past_20000_is_accepted(service):
+    service.api.credentials.user_token.return_value = "t"
+    service.api.search_library.return_value = {"items": []}
+    async with Client(create_server(service)) as client:
+        await client.call_tool("search_library", {"offset": 20100})
+    service.api.search_library.assert_called_once_with("", 50, 20100)
