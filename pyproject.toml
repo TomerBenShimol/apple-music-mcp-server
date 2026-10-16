@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tomer-apple-music-mcp"
+version = "0.1.0"
+description = "Apple Music library and playlist MCP server built with Python and FastMCP"
+requires-python = ">=3.11"
+dependencies = ["fastmcp>=3.4,<4", "httpx>=0.28,<1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "ruff>=0.12,<1"]
+browser = ["playwright>=1.55,<2"]
+
+[project.scripts]
+apple-music-mcp = "apple_music_mcp.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/apple_music_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
