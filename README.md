@@ -19,6 +19,9 @@ own Apple Music account.
 
 > Remove this song from Evening, but keep it in my library.
 
+See a [real catalog search](docs/examples/catalog-search.md) that distinguishes
+the album version of a song from its radio edit and remix.
+
 Your client starts the server on your Mac when it connects. You don't need to
 keep a separate Terminal window open after setup, or install Docker or Linux.
 There's no server to host.
@@ -48,7 +51,7 @@ endpoints, so Apple changes can break it.
 
 | Requirement | Details |
 | --- | --- |
-| macOS | This guide is for Macs; Music.app automation also requires macOS |
+| macOS | Apple Silicon or Intel; Intel installs need extra build tools noted below |
 | Python 3.11+ | Run `python3 --version` to check your version |
 | Git | Used to clone the repository |
 | Apple Music account | You need an active subscription to work with your personal library |
@@ -64,12 +67,15 @@ If you're using another operating system, read the
 
 ### 1. Clone and install
 
-Open Terminal and check that `python3` is version 3.11 or newer, then run:
+Open Terminal and check that `python3` is version 3.11 or newer. If you're on an
+Intel Mac, read the [build requirements](docs/installation.md#intel-macs) before
+the package installation step.
 
 ```bash
 git clone https://github.com/TomerBenShimol/apple-music-mcp-server.git
 cd apple-music-mcp-server
 python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e '.[browser]'
 ```
 
@@ -417,6 +423,7 @@ user text into executable source.
 | Symptom | What to check |
 | --- | --- |
 | Python installation fails | Run `python3 --version`. You need Python 3.11 or newer |
+| Installation fails while building cryptography on an Intel Mac | Follow the [Intel build steps](docs/installation.md#intel-macs) for OpenSSL and Rust |
 | Sign-in cannot open a browser | Install the `[browser]` extra, then make sure you have Chrome or Playwright Chromium |
 | Tools do not appear in the client | Reopen the client or reload MCP, then approve the server. Check that you're using the right profile and that your organization allows it |
 | Server cannot start | Run `doctor --probe` and check that the Python path in your settings still exists |
@@ -503,6 +510,7 @@ logs, virtual environments, screenshots, and the vendor tunnel binary.
 ## Documentation and acknowledgments
 
 - [Local client setup and acceptance checks](docs/clients.md)
+- [macOS installation and Intel build requirements](docs/installation.md)
 - [Optional ChatGPT tunnel setup](docs/chatgpt.md)
 - [Optional macOS background service](docs/background-service.md)
 - [FastMCP tools](https://gofastmcp.com/servers/tools)
