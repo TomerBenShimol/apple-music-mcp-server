@@ -6,9 +6,10 @@ import os
 import threading
 
 from .auth import Credentials, MusicError, private_json, read_json
-from .browser_login import browser_login
+from .browser_login import browser_login, sweep_profiles
 
 ACTIVE = {"starting", "waiting_for_sign_in"}
+CLOSE_WAIT_SECONDS = 30
 ENVIRONMENT_OVERRIDE = (
     "APPLE_MUSIC_USER_TOKEN is set in this server's environment and overrides any sign-in. "
     "Remove it from the MCP server configuration, restart the server, then connect again."
@@ -82,6 +83,7 @@ class SignInManager:
                 raise MusicError("Cannot start sign-in in the local credential directory.") from exc
             self.cancelled = threading.Event()
             try:
+                sweep_profiles(self.credentials.root)
                 private_json(
                     self.state_path,
                     {
@@ -135,4 +137,4 @@ class SignInManager:
         self.cancelled.set()
         if self.thread is not None:
             # The browser helper closes the window and removes its temporary profile.
-            self.thread.join()
+            self.thread.join(timeout=CLOSE_WAIT_SECONDS)

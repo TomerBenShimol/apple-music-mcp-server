@@ -92,3 +92,14 @@ def test_signin_refuses_while_an_environment_token_overrides_it(tmp_path, monkey
     result = SignInManager(Credentials(tmp_path)).start()
     assert result["status"] == "blocked"
     assert "APPLE_MUSIC_USER_TOKEN" in result["message"]
+
+
+def test_starting_a_signin_removes_profiles_left_by_an_interrupted_one(tmp_path, monkeypatch):
+    stale = tmp_path / ".signin-abc123"
+    stale.mkdir(parents=True)
+    (stale / "Cookies").write_text("session")
+    monkeypatch.setattr("apple_music_mcp.signin.browser_login", lambda *a, **kw: "il")
+    manager = SignInManager(Credentials(tmp_path))
+    manager.start()
+    manager.close()
+    assert not stale.exists()

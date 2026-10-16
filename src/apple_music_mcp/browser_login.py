@@ -7,6 +7,7 @@ the temporary browser profile, including Apple's other session cookies, is remov
 
 from __future__ import annotations
 
+import shutil
 import sys
 import tempfile
 import time
@@ -14,7 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import Event
 
-from .auth import Credentials, MusicError, verify_user_token
+from .auth import Credentials, MusicError, TransientMusicError, verify_user_token
 
 
 def music_token(cookies: list[dict]) -> str | None:
@@ -31,6 +32,36 @@ def music_token(cookies: list[dict]) -> str | None:
                 Credentials.validate_user_token(token)
                 return token
     return None
+
+
+PROFILE_PREFIX = ".signin-"
+RETRY_PAUSE_MS = 10000
+
+
+def sweep_profiles(root: Path) -> None:
+    """Remove browser profiles an interrupted sign-in left behind; callers hold the sign-in lock."""
+    for stale in root.glob(PROFILE_PREFIX + "*"):
+        shutil.rmtree(stale, ignore_errors=True)
+
+
+def ensure_window(context, cancelled: Event | None) -> None:
+    if cancelled is not None and cancelled.is_set():
+        raise MusicError("Apple Music sign-in was cancelled.")
+    if not context.pages:
+        raise MusicError("The sign-in window was closed. Run login again.")
+
+
+def signed_in_storefront(credentials: Credentials, context) -> str | None:
+    token = music_token(context.cookies("https://music.apple.com"))
+    if not token:
+        return None
+    try:
+        storefront = verify_user_token(credentials, token, web=True)
+    except TransientMusicError:
+        context.pages[0].wait_for_timeout(RETRY_PAUSE_MS)
+        return None
+    credentials.save_user_token(token, source="web")
+    return storefront
 
 
 def browser_login(
@@ -58,7 +89,7 @@ def browser_login(
     )
     deadline = time.monotonic() + max(1, min(timeout, 3600))
     try:
-        with tempfile.TemporaryDirectory(prefix=".signin-", dir=credentials.root) as profile:
+        with tempfile.TemporaryDirectory(prefix=PROFILE_PREFIX, dir=credentials.root) as profile:
             with sync_playwright() as playwright:
                 context = playwright.chromium.launch_persistent_context(
                     profile,
@@ -80,15 +111,10 @@ def browser_login(
                         flush=True,
                     )
                     while time.monotonic() < deadline:
-                        if cancelled is not None and cancelled.is_set():
-                            raise MusicError("Apple Music sign-in was cancelled.")
-                        token = music_token(context.cookies("https://music.apple.com"))
-                        if token:
-                            storefront = verify_user_token(credentials, token, web=True)
-                            credentials.save_user_token(token, source="web")
+                        ensure_window(context, cancelled)
+                        storefront = signed_in_storefront(credentials, context)
+                        if storefront:
                             return storefront
-                        if not context.pages:
-                            raise MusicError("The sign-in window was closed. Run login again.")
                         # Dispatch browser events without navigating away from sign-in/2FA.
                         context.pages[0].wait_for_timeout(1000)
                     raise MusicError("Sign-in timed out. Run login again when you are ready.")
