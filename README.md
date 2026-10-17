@@ -4,6 +4,7 @@
 ![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)
 ![Built with FastMCP 3](https://img.shields.io/badge/built_with-FastMCP_3-6E56CF)
 ![Transport: stdio](https://img.shields.io/badge/transport-stdio-00897B)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Connect Apple Music to your favorite AI client and ask it to manage your music.
 Find a song, add it to your library, or put a playlist together without leaving
@@ -521,3 +522,7 @@ The web API's endpoint behavior was checked against
 [epheterson/applemusic-mcp](https://github.com/epheterson/applemusic-mcp/blob/main/src/applemusic_mcp/amp_api.py).
 Browser sign-in uses the token mechanism from its
 [browser authentication implementation](https://github.com/epheterson/applemusic-mcp/blob/main/src/applemusic_mcp/browser.py).
+
+## License
+
+This project is available under the [MIT License](LICENSE).

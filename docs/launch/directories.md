@@ -34,6 +34,8 @@ Platform: macOS
 
 Transport: stdio
 
+License: [MIT](../../LICENSE)
+
 Requirements: Python 3.11+, a browser, an MCP client, and an Apple Music account
 with an active subscription for personal library operations. Native tools also
 need Music.app access. See the project README for installation and sign-in.
@@ -47,10 +49,9 @@ GitHub repository submission under [MCP servers](https://glama.ai/mcp/servers).
 Use the shared name, URL, and description above. This is a local server listing;
 the remote connector flow isn't the right submission type.
 
-If the form asks for a license, use the license actually committed to the
-repository. If it asks about a successful test or supported client, report only
-what has been verified. Glama checks licensing, security, and server health; a
-listing request doesn't establish a passing result.
+If the form asks for a license, select MIT. If it asks about a successful test or
+supported client, report only what has been verified. Glama checks licensing,
+security, and server health; a listing request doesn't establish a passing result.
 
 ## Awesome MCP Servers
 

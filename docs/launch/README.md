@@ -10,7 +10,7 @@ MCP call. A video of a full playlist edit still needs to be recorded.
 
 ## Before posting
 
-- Choose a license and add it to the repository before describing it as open source.
+- The repository uses the [MIT License](../../LICENSE).
 - Try a fresh clone, sign-in, and connection in at least one target client. Record
   which client and version you actually used.
 - Make a short recording of a real interaction. Use a new demo playlist and avoid
