@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import __version__
 from .auth import data_dir
+from .capabilities import capabilities
 from .clients import CLIENTS, absolute_path, server_entry
 
 
@@ -26,8 +27,6 @@ def warnings(browser: bool) -> list[str]:
     result = []
     if not browser:
         result.append("Browser sign-in needs this package's [browser] extra and a browser runtime.")
-    if sys.platform == "win32":
-        result.append("Windows process locking is not implemented; avoid concurrent MCP clients.")
     return result
 
 
@@ -39,7 +38,7 @@ def diagnostics(credentials: Path) -> dict:
         "status": "ready" if all(dependencies.values()) else "needs_attention",
         "version": __version__,
         "python": {"executable": sys.executable, "version": sys.version.split()[0]},
-        "platform": sys.platform,
+        **capabilities(),
         "dependencies": dependencies,
         "browser_helper_installed": browser,
         "browser_runtime": "not_checked; sign-in needs Chrome on macOS or Playwright Chromium",

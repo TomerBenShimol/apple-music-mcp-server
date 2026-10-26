@@ -122,10 +122,12 @@ end-to-end use in each provider's application is a separate acceptance check; a
 generated entry does not prove that a particular installed client version loaded it.
 
 Music.app automation, native playlist reordering, and local audio imports require
-macOS. The web backend is intended for other operating systems, but Windows currently
-lacks shared process locking for edits and sign-in. Treat Windows runtime support as
-experimental and avoid simultaneous clients there until locking is implemented and
-tested. Browser installation and permissions must be checked on each operating system.
+macOS. Windows uses the web backend and exposes 15 tools; the two native-only
+tools are hidden. Edits and sign-in share process locks on both systems. Follow
+the [Windows setup guide](windows.md) for PowerShell commands and browser installation.
+Windows browser sign-in and use inside each client still require acceptance testing
+on a Windows machine. The optional macOS service and ChatGPT tunnel helpers are
+separate from the Windows stdio setup.
 
 ## References
 

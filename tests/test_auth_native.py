@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -19,8 +20,9 @@ def test_saved_credentials_are_private_and_can_be_replaced(tmp_path):
     credentials = Credentials(tmp_path / "private")
     credentials.save_user_token("a" * 40)
     path = credentials.root / "credentials.json"
-    assert path.stat().st_mode & 0o777 == 0o600
-    assert path.parent.stat().st_mode & 0o777 == 0o700
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert path.parent.stat().st_mode & 0o777 == 0o700
     credentials.save_user_token("b" * 40)
     assert credentials.user_token() == "b" * 40
     assert not list(credentials.root.glob(".music-*"))
@@ -160,7 +162,8 @@ def test_browser_login_cleans_profile_and_saves_only_verified_music_token(
 
     def launch(profile, **kwargs):
         observed["profile"] = Path(profile)
-        assert Path(profile).stat().st_mode & 0o777 == 0o700
+        if os.name == "posix":
+            assert Path(profile).stat().st_mode & 0o777 == 0o700
         assert kwargs["chromium_sandbox"] is True
         assert kwargs["headless"] is False
         return Context()

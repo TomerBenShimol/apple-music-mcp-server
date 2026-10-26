@@ -13,10 +13,12 @@ import httpx
 
 from .api import MusicAPI
 from .auth import Credentials, MusicError, login_server
+from .capabilities import capabilities
 from .clients import add_commands, list_clients, show_config
 from .doctor import add_doctor_command, doctor
 from .install import add_install_command, install_client
 from .native import NativeMusic
+from .signin import SignInManager
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -79,17 +81,27 @@ def musickit_login(credentials: Credentials, token: str, args) -> None:
 
 def login(args) -> None:
     credentials = Credentials()
-    with httpx.Client(timeout=20) as client:
-        token, web = credentials.developer_token(client, force_web=args.web)
-    if web:
-        web_login(credentials, args)
-        return
-    musickit_login(credentials, token, args)
+    if credentials.user_token_from_environment():
+        raise MusicError(
+            "Remove APPLE_MUSIC_USER_TOKEN from the environment before signing in again."
+        )
+    manager = SignInManager(credentials)
+    with manager.session():
+        with httpx.Client(timeout=20) as client:
+            token, web = credentials.developer_token(client, force_web=args.web)
+        if web:
+            web_login(credentials, args)
+        else:
+            musickit_login(credentials, token, args)
 
 
 def status(args) -> None:
     api = MusicAPI()
-    result = {"web_signed_in": bool(api.credentials.user_token()), "web_accessible": False}
+    result = {
+        "web_signed_in": bool(api.credentials.user_token()),
+        "web_accessible": False,
+        **capabilities(),
+    }
     result.update(api.check_access() if result["web_signed_in"] else {})
     result.update({"native": NativeMusic().check_access()} if args.native else {})
     print(json.dumps(result, indent=2))
@@ -118,6 +130,11 @@ COMMANDS: dict[str | None, Callable] = {
 
 
 def main() -> None:
+    if sys.platform == "win32":
+        # MCP and generated configuration are UTF-8, including redirected output.
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8")
     args = build_parser().parse_args()
     try:
         COMMANDS[args.command](args)

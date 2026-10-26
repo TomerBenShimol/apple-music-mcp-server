@@ -53,7 +53,7 @@ def read_json(path: Path) -> dict:
     if not path.exists():
         return {}
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
             raise ValueError
         return value

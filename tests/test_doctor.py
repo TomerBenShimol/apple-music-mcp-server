@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from apple_music_mcp.capabilities import supports_native
 from apple_music_mcp.doctor import diagnostics, doctor, probe_server, run_probe
 
 
@@ -36,7 +37,7 @@ def test_probe_failure_does_not_expose_exception_contents(tmp_path, monkeypatch)
 async def test_fresh_stdio_server_discovers_tools_without_signing_in(tmp_path):
     report = await probe_server(tmp_path)
     assert report["status"] == "ready"
-    assert report["tool_count"] == 17
+    assert report["tool_count"] == (17 if supports_native() else 15)
     assert "create_playlist" in report["tools"]
     assert "remove_songs_from_library" in report["tools"]
     assert not list(tmp_path.iterdir())

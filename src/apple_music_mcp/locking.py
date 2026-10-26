@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from .auth import MusicError
+from .process_lock import open_lock, release_lock, try_lock
 
 
 class MusicEditLock:
@@ -22,7 +23,7 @@ class MusicEditLock:
         if not self.thread.acquire(timeout=self.timeout):
             raise MusicError("Another music edit is running. Wait for it to finish, then retry.")
         try:
-            if self.depth == 0 and os.name == "posix":
+            if self.depth == 0:
                 self._acquire_file()
             self.depth += 1
             return self
@@ -37,14 +38,11 @@ class MusicEditLock:
         self.thread.release()
 
     def _acquire_file(self):
-        import fcntl
-
-        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        self.fd = open_lock(self.path)
         deadline = time.monotonic() + self.timeout
         while True:
             try:
-                fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                try_lock(self.fd)
                 return
             except BlockingIOError:
                 if time.monotonic() >= deadline:
@@ -57,12 +55,7 @@ class MusicEditLock:
         try:
             self.depth -= 1
             if self.depth == 0 and self.fd is not None:
-                import fcntl
-
-                try:
-                    fcntl.flock(self.fd, fcntl.LOCK_UN)
-                finally:
-                    os.close(self.fd)
-                    self.fd = None
+                fd, self.fd = self.fd, None
+                release_lock(fd)
         finally:
             self.thread.release()

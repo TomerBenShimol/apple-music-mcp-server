@@ -9,7 +9,12 @@ from apple_music_mcp.server import MusicService, create_server
 
 
 @pytest.fixture
-def service(tmp_path):
+def service(tmp_path, monkeypatch):
+    # These tests exercise the macOS tool surface with a mocked native backend.
+    monkeypatch.setattr(
+        "apple_music_mcp.server.capabilities",
+        lambda: {"platform": "darwin", "native_backend_available": True, "unavailable_tools": []},
+    )
     native = MagicMock()
     native.validate_id.side_effect = lambda value: value.upper()
     api = MagicMock()

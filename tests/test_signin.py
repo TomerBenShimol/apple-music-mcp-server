@@ -1,3 +1,4 @@
+import os
 import threading
 
 import pytest
@@ -36,7 +37,8 @@ def test_signin_returns_before_human_finishes_and_deduplicates_clients(tmp_path,
     assert manager.status() == {"status": "connected", "storefront": "il"}
     assert credentials.user_token() == "verified" * 10
     assert "verified" not in manager.state_path.read_text()
-    assert manager.state_path.stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":
+        assert manager.state_path.stat().st_mode & 0o777 == 0o600
 
 
 @pytest.mark.parametrize(
@@ -103,3 +105,31 @@ def test_starting_a_signin_removes_profiles_left_by_an_interrupted_one(tmp_path,
     manager.start()
     manager.close()
     assert not stale.exists()
+
+
+def test_cli_signin_excludes_other_processes_and_releases_after_error(tmp_path):
+    import subprocess
+    import sys
+
+    program = """
+import sys
+from pathlib import Path
+from apple_music_mcp.auth import Credentials, MusicError
+from apple_music_mcp.signin import SignInManager
+try:
+    with SignInManager(Credentials(Path(sys.argv[1]))).session():
+        sys.exit(1)
+except MusicError:
+    sys.exit(0)
+"""
+    first = SignInManager(Credentials(tmp_path))
+    with pytest.raises(RuntimeError):
+        with first.session():
+            result = subprocess.run(
+                [sys.executable, "-c", program, str(tmp_path)], timeout=10, check=False
+            )
+            assert result.returncode == 0
+            assert SignInManager(first.credentials).start()["status"] == "already_running"
+            raise RuntimeError("Interrupted synchronous sign-in")
+    with SignInManager(first.credentials).session():
+        pass

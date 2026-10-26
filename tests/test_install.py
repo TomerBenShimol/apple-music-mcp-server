@@ -140,7 +140,12 @@ def test_symlink_settings_require_explicit_real_path(tmp_path):
     target = tmp_path / "real"
     target.write_text("{}")
     args = arguments(tmp_path)
-    args.config_file.symlink_to(target)
+    try:
+        args.config_file.symlink_to(target)
+    except OSError:
+        if sys.platform == "win32":
+            pytest.skip("Windows symlinks require Developer Mode or administrator privileges")
+        raise
     with pytest.raises(MusicError, match="symbolic link"):
         install_config(args)
     assert target.read_text() == "{}"

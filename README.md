@@ -1,6 +1,6 @@
 # Apple Music MCP Server
 
-![Platform: macOS](https://img.shields.io/badge/platform-macOS-black)
+![Platform: macOS and Windows](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-black)
 ![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)
 ![Built with FastMCP 3](https://img.shields.io/badge/built_with-FastMCP_3-6E56CF)
 ![Transport: stdio](https://img.shields.io/badge/transport-stdio-00897B)
@@ -10,9 +10,9 @@ Connect Apple Music to your favorite AI client and ask it to manage your music.
 Find a song, add it to your library, or put a playlist together without leaving
 your conversation.
 
-This is a local MCP server built with Python and FastMCP, with 17 tools for catalog
-search, library edits, and playlists. Install it on your Mac and sign in to your
-own Apple Music account.
+This is a local MCP server built with Python and FastMCP, with 17 tools on macOS
+and 15 on Windows for catalog search, library edits, and playlists. Install it
+locally and sign in to your own Apple Music account.
 
 > Find the album version of “Get Lucky” by Daft Punk and add it to my library.
 
@@ -23,7 +23,7 @@ own Apple Music account.
 See a [real catalog search](docs/examples/catalog-search.md) that distinguishes
 the album version of a song from its radio edit and remix.
 
-Your client starts the server on your Mac when it connects. You don't need to
+Your client starts the server on your computer when it connects. You don't need to
 keep a separate Terminal window open after setup, or install Docker or Linux.
 There's no server to host.
 
@@ -37,7 +37,7 @@ There's no server to host.
 - Browse your library, look up song details, and add or remove songs.
 - Create playlists, change their names or descriptions, copy them, edit their tracks,
   or delete them.
-- Reorder playlists and import local audio through Music.app.
+- On macOS, reorder playlists and import local audio through Music.app.
 - Use the same saved sign-in across your configured clients.
 
 The setup commands can write your client settings or print configuration for you
@@ -52,19 +52,21 @@ endpoints, so Apple changes can break it.
 
 | Requirement | Details |
 | --- | --- |
-| macOS | Apple Silicon or Intel; Intel installs need extra build tools noted below |
+| Operating system | macOS (Apple Silicon or Intel) or Windows 11; Intel Macs need extra build tools noted below |
 | Python 3.11+ | Run `python3 --version` to check your version |
 | Git | Used to clone the repository |
 | Apple Music account | You need an active subscription to work with your personal library |
-| Browser | Google Chrome, or Playwright Chromium using the command below |
+| Browser | Playwright Chromium; macOS can also use installed Google Chrome |
 | MCP client | Your coding agent or desktop client needs to be installed already |
 | Internet access | Used for sign-in, catalog searches, and online library access |
 
-For playlist reordering and local audio imports, sign in to Music.app as well.
-If you're using another operating system, read the
-[compatibility notes](docs/clients.md#compatibility-boundaries).
+For playlist reordering and local audio imports on macOS, sign in to Music.app as well.
+Windows setup uses PowerShell and has its own [installation guide](docs/windows.md).
 
 ## Quick start
+
+The commands below are for macOS. Windows users should follow the complete
+[PowerShell setup](docs/windows.md), including browser installation and client commands.
 
 ### 1. Clone and install
 
@@ -285,7 +287,7 @@ The command fills in your paths in an entry like this:
 ```
 
 Check your client's documentation for the right root structure. This server uses
-local stdio, so a cloud application needs a way to reach your Mac.
+local stdio, so a cloud application needs a way to reach the computer running it.
 
 ### ChatGPT
 
@@ -319,6 +321,23 @@ isn't a hosted HTTP deployment or a one-click plugin package in this install flo
 | `reorder_playlist` | Change the order of a Music.app playlist and keep a recovery copy |
 | `import_audio_files` | Import local audio files into Music.app |
 
+### Platform capabilities
+
+| Capability | macOS | Windows |
+| --- | --- | --- |
+| Catalog search and song details | Yes | Yes |
+| Search library, add and remove songs | Yes | Yes |
+| Create, rename, copy and delete playlists | Yes | Yes |
+| Read playlists, add and remove tracks | Yes | Yes |
+| Reorder existing playlists | Music.app | Unavailable |
+| Import local audio | Music.app | Unavailable |
+| Tools exposed to clients | 17 | 15 |
+
+Library access and web playlist edits require Apple Music sign-in. On Windows,
+`reorder_playlist` and `import_audio_files` are hidden from MCP discovery. A Mac
+is not needed for the Windows tools. Windows browser sign-in and use inside each
+client still need acceptance testing on a Windows machine.
+
 ### Music.app access
 
 To reorder a playlist or import local audio, the server needs access to Music.app.
@@ -333,8 +352,8 @@ this later in System Settings → Privacy & Security → Automation. Your agent 
 also call `get_status(check_native=true)`. A permission you granted to Terminal
 may not cover your client app.
 
-By default, the server uses web access if you're signed in and native access
-otherwise. You can choose Music.app explicitly with `backend="native"` on
+On Windows, automatic backend selection always uses web access. On macOS, the
+server uses web access when signed in and Music.app otherwise. You can choose Music.app explicitly with `backend="native"` on
 `search_library`, `list_playlists`, and `create_playlist`. Catalog searches always
 use Apple's online catalog.
 
@@ -414,7 +433,7 @@ If you've set `APPLE_MUSIC_USER_TOKEN`, `connect_apple_music` won't start anothe
 sign-in: that environment value would override the new token. You can see this
 in the `token_from_environment` field returned by `get_status`.
 
-On macOS, server processes share a local lock to keep music edits from overlapping.
+On macOS and Windows, server processes share a local lock to keep music edits from overlapping.
 Clients also reuse a sign-in flow if one is already running. For Music.app calls,
 the native bridge passes JSON arguments to a fixed JXA program. It doesn't insert
 user text into executable source.
@@ -448,7 +467,7 @@ without calling them or changing your library. Use `status` to check account acc
 with Apple. You'll still need to check the browser and Automation permissions
 separately; `doctor` reports those as unchecked.
 
-If you open an issue, include your macOS, Python, and client versions, along with
+If you open an issue, include your operating system, Python, and client versions, along with
 the command you ran and the error. Check logs and diagnostics for private paths or
 account data before posting them. Don't share tokens or `credentials.json`.
 
@@ -488,7 +507,7 @@ authorization. If you set up the ChatGPT background service, follow its
 .venv/bin/ruff format --check src scripts tests
 ```
 
-Tests cover tool schemas, IDs, protected playlists, dry runs, pagination, duplicate
+The CI workflow runs tests on macOS and Windows. Tests cover tool schemas, IDs, protected playlists, dry runs, pagination, duplicate
 detection, partial failures, timeouts, credentials, sign-in, process locking, client
 settings, and background startup. They don't modify a real music library. Some
 need to bind temporary localhost ports. Client format tests and the MCP probe
@@ -512,6 +531,7 @@ logs, virtual environments, screenshots, and the vendor tunnel binary.
 
 - [Local client setup and acceptance checks](docs/clients.md)
 - [macOS installation and Intel build requirements](docs/installation.md)
+- [Windows installation and client setup](docs/windows.md)
 - [Optional ChatGPT tunnel setup](docs/chatgpt.md)
 - [Optional macOS background service](docs/background-service.md)
 - [FastMCP tools](https://gofastmcp.com/servers/tools)

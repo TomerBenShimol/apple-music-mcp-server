@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import os
 import threading
+from contextlib import contextmanager
 
 from .auth import Credentials, MusicError, private_json, read_json
 from .browser_login import browser_login, sweep_profiles
+from .process_lock import open_lock, release_lock, try_lock
 
 ACTIVE = {"starting", "waiting_for_sign_in"}
 CLOSE_WAIT_SECONDS = 30
@@ -26,16 +28,9 @@ class SignInManager:
         self.thread: threading.Thread | None = None
 
     def _acquire(self, *, create: bool) -> int:
-        flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
-        if create:
-            self.credentials.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-            flags |= os.O_CREAT
-        fd = os.open(self.lock_path, flags, 0o600)
+        fd = open_lock(self.lock_path, create=create)
         try:
-            if os.name == "posix":
-                import fcntl
-
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try_lock(fd)
             return fd
         except BaseException:
             os.close(fd)
@@ -43,8 +38,23 @@ class SignInManager:
 
     @staticmethod
     def _release(fd: int) -> None:
-        # Closing the descriptor releases its OS lock, even on an error path.
-        os.close(fd)
+        release_lock(fd)
+
+    @contextmanager
+    def session(self):
+        """Keep a synchronous CLI sign-in from overlapping an MCP sign-in."""
+        try:
+            fd = self._acquire(create=True)
+        except BlockingIOError:
+            raise MusicError(
+                "Apple Music sign-in is already running in another MCP client."
+            ) from None
+        except OSError as exc:
+            raise MusicError("Cannot start sign-in in the local credential directory.") from exc
+        try:
+            yield
+        finally:
+            self._release(fd)
 
     def status(self) -> dict:
         state = read_json(self.state_path) or {"status": "not_started"}
@@ -104,7 +114,7 @@ class SignInManager:
             self.state_path,
             {
                 "status": "waiting_for_sign_in",
-                "message": "Complete Apple Music sign-in in the browser on this Mac. "
+                "message": "Complete Apple Music sign-in in the browser on this computer. "
                 "Keep passwords and verification codes in Apple's sign-in page. "
                 "Call get_status after sign-in to verify library access.",
             },

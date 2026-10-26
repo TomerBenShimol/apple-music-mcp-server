@@ -11,7 +11,12 @@ COOKIE = {"name": "media-user-token", "domain": ".apple.com", "secure": True, "v
 
 
 @pytest.fixture
-def fake_browser(monkeypatch):
+def browser_launches():
+    return []
+
+
+@pytest.fixture
+def fake_browser(monkeypatch, browser_launches):
     waits = []
 
     class Context:
@@ -28,7 +33,11 @@ def fake_browser(monkeypatch):
 
     class Playwright:
         def __enter__(self):
-            chromium = SimpleNamespace(launch_persistent_context=lambda profile, **kw: Context())
+            def launch(profile, **kwargs):
+                browser_launches.append(kwargs)
+                return Context()
+
+            chromium = SimpleNamespace(launch_persistent_context=launch)
             return SimpleNamespace(chromium=chromium)
 
         def __exit__(self, *args):
@@ -81,3 +90,17 @@ def test_rejection_is_not_retried(tmp_path, monkeypatch, fake_browser):
     with pytest.raises(MusicError, match="rejected access"):
         browser_login(Credentials(tmp_path))
     assert len(calls) == 1
+
+
+def test_windows_signin_uses_bundled_chromium_and_cleans_profile(
+    tmp_path, monkeypatch, fake_browser, browser_launches
+):
+    from apple_music_mcp import browser_login as module
+
+    monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32", stderr=sys.stderr))
+    monkeypatch.setattr(module, "verify_user_token", lambda *args, **kwargs: "us")
+    credentials = Credentials(tmp_path / "Music 音楽")
+    assert browser_login(credentials) == "us"
+    assert browser_launches == [{"channel": None, "headless": False, "chromium_sandbox": True}]
+    assert credentials.user_token() == COOKIE["value"]
+    assert not list(credentials.root.glob(".signin-*"))

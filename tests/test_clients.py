@@ -29,7 +29,12 @@ def test_config_round_trip_uses_same_server_and_credentials(client, tmp_path, mo
 def test_virtualenv_python_symlink_is_preserved(tmp_path):
     interpreter = tmp_path / "virtual environment/bin/python"
     interpreter.parent.mkdir(parents=True)
-    interpreter.symlink_to(sys.executable)
+    try:
+        interpreter.symlink_to(sys.executable)
+    except OSError:
+        if sys.platform == "win32":
+            pytest.skip("Windows symlinks require Developer Mode or administrator privileges")
+        raise
     entry = server_entry("cursor", interpreter, tmp_path, None)
     assert entry["command"] == str(interpreter)
     assert "APPLE_MUSIC_STOREFRONT" not in entry["env"]
@@ -38,7 +43,7 @@ def test_virtualenv_python_symlink_is_preserved(tmp_path):
 def test_codex_config_preserves_unicode_paths_without_invalid_surrogate_escapes(tmp_path):
     interpreter = tmp_path / "music 🎵/python"
     interpreter.parent.mkdir()
-    interpreter.symlink_to(sys.executable)
+    interpreter.touch()
     entry = server_entry("codex", interpreter, tmp_path / "library 🎵", None)
     decoded = tomllib.loads(render_config("codex", "apple-music", entry))
     assert decoded["mcp_servers"]["apple-music"] == entry

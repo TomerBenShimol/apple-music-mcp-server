@@ -1,5 +1,7 @@
 # macOS installation notes
 
+For Windows, use the [PowerShell installation guide](windows.md).
+
 [Back to the README](../README.md#quick-start)
 
 The main setup uses Python 3.11 or newer in a virtual environment. Upgrade pip

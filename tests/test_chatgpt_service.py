@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="macOS launchd/Keychain helper")
+
 
 @pytest.fixture
 def service(tmp_path, monkeypatch):

@@ -14,6 +14,7 @@ from pydantic import Field
 
 from .api import MusicAPI
 from .auth import MusicError
+from .capabilities import NATIVE_TOOLS, capabilities
 from .locking import MusicEditLock
 from .native import NATIVE_ID, NativeMusic, recovery_name
 from .signin import SignInManager
@@ -76,9 +77,23 @@ class MusicService:
         self.native = native or NativeMusic()
         self.lock = MusicEditLock(self.api.credentials.root)
         self.signin = signin or SignInManager(self.api.credentials)
+        self.capabilities = capabilities()
+
+    def call_native(self, action: str, **kwargs) -> dict:
+        if not self.capabilities["native_backend_available"]:
+            raise MusicError(
+                "Music.app automation requires macOS. Use web IDs and "
+                "connect_apple_music to sign in on this computer."
+            )
+        return self.native.call(action, **kwargs)
 
     def use_web(self, backend: Backend) -> bool:
-        return backend == "web" or (backend == "auto" and bool(self.api.credentials.user_token()))
+        native = self.capabilities["native_backend_available"]
+        if backend == "native" and not native:
+            raise MusicError("The native backend requires macOS. Use backend='web' or 'auto'.")
+        return backend == "web" or (
+            backend == "auto" and (not native or bool(self.api.credentials.user_token()))
+        )
 
     def native_ids(self, values: list[str]) -> list[str]:
         if not 1 <= len(values) <= 100 or len(set(v.upper() for v in values)) != len(values):
@@ -88,7 +103,7 @@ class MusicService:
     def all_native_tracks(self, playlist_id: str) -> list[dict]:
         tracks, offset = [], 0
         while True:
-            result = self.native.call("playlist_tracks", id=playlist_id, limit=100, offset=offset)
+            result = self.call_native("playlist_tracks", id=playlist_id, limit=100, offset=offset)
             tracks.extend(result["items"])
             if result["next_offset"] is None:
                 return tracks
@@ -125,6 +140,12 @@ def create_server(service: MusicService | None = None) -> FastMCP:
             "before retrying the requested edit. Do not use terminal commands for sign-in. "
             "Music.app read access does not imply web account write access. Never ask for "
             "an Apple password or verification code in chat."
+            + (
+                " Native Music.app automation is available on this macOS server."
+                if service.capabilities["native_backend_available"]
+                else " This server uses web access. Native Music.app IDs, playlist reordering, "
+                "and local audio imports are unavailable. Use auto or web backend selection."
+            )
         ),
         lifespan=lifespan,
     )
@@ -141,9 +162,15 @@ def create_server(service: MusicService | None = None) -> FastMCP:
             "credential_directory": str(service.api.credentials.root),
             "login_tool": "connect_apple_music",
             "sign_in": service.signin.status(),
+            **service.capabilities,
         }
         result.update(service.api.check_access() if signed_in else {})
-        result.update({"native": service.native.check_access()} if check_native else {})
+        if check_native:
+            result["native"] = (
+                service.native.check_access()
+                if service.capabilities["native_backend_available"]
+                else {"accessible": False, "reason": "Music.app automation requires macOS."}
+            )
         return result
 
     @mcp.tool(annotations=WRITE)
@@ -154,7 +181,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         """Start Apple Music account sign-in in a local browser, returning immediately.
 
         Use when the user requests or approves account connection. The user completes
-        Apple's sign-in on this Mac; no password or verification code enters chat.
+        Apple's sign-in on this computer; no password or verification code enters chat.
         get_status reports progress and verifies web_accessible before any music edit.
         Repeated calls while sign-in is active reuse the existing flow. Opens no shell.
         """
@@ -178,20 +205,21 @@ def create_server(service: MusicService | None = None) -> FastMCP:
     ) -> dict:
         """Search your library; empty query browses songs. Web searches return at most 25 per page.
 
-        backend='native' returns Music.app persistent IDs; auto uses web when signed in.
+        backend='native' is macOS-only and returns Music.app persistent IDs.
+        Auto uses web on Windows, and on macOS when signed in.
         """
         if len(query) > 200:
             raise MusicError("Query must be at most 200 characters.")
         if service.use_web(backend):
             return service.api.search_library(query.strip(), limit, offset)
-        return service.native.call("search", query=query.strip(), limit=limit, offset=offset)
+        return service.call_native("search", query=query.strip(), limit=limit, offset=offset)
 
     @mcp.tool(annotations=READ)
     @user_errors
     def get_song_details(song_id: str) -> dict:
         """Get one exact song, using a catalog, web library, or native persistent ID."""
         if NATIVE_ID.fullmatch(song_id):
-            return service.native.call("track", id=song_id)
+            return service.call_native("track", id=song_id)
         return service.api.get_song(song_id)
 
     @mcp.tool(annotations=WRITE)
@@ -211,7 +239,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         """
         with service.lock:
             if all(NATIVE_ID.fullmatch(i) for i in library_song_ids):
-                return service.native.call(
+                return service.call_native(
                     "remove_library",
                     track_ids=service.native_ids(library_song_ids),
                     dry_run=dry_run,
@@ -224,14 +252,14 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         """List library playlists with their exact IDs. Use next_offset to continue."""
         if service.use_web(backend):
             return service.api.list_playlists(limit, offset)
-        return service.native.call("playlists", limit=limit, offset=offset)
+        return service.call_native("playlists", limit=limit, offset=offset)
 
     @mcp.tool(annotations=READ)
     @user_errors
     def get_playlist_tracks(playlist_id: str, limit: PageSize = 100, offset: Offset = 0) -> dict:
         """Read playlist contents. These song IDs identify membership for playlist removals."""
         if NATIVE_ID.fullmatch(playlist_id):
-            return service.native.call(
+            return service.call_native(
                 "playlist_tracks", id=playlist_id, limit=limit, offset=offset
             )
         return service.api.playlist_tracks(playlist_id, limit, offset)
@@ -245,7 +273,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         with service.lock:
             if service.use_web(backend):
                 return service.api.create_playlist(name, description)
-            return service.native.call("create", name=name, description=description)
+            return service.call_native("create", name=name, description=description)
 
     @mcp.tool(annotations=WRITE)
     @user_errors
@@ -259,7 +287,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         changes = playlist_changes(name, description)
         with service.lock:
             if NATIVE_ID.fullmatch(playlist_id):
-                return service.native.call("update", id=playlist_id, dry_run=dry_run, **changes)
+                return service.call_native("update", id=playlist_id, dry_run=dry_run, **changes)
             return service.api.update_playlist(playlist_id, changes, dry_run)
 
     @mcp.tool(annotations=DELETE)
@@ -268,7 +296,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         """Delete one exact editable playlist. Songs stay in the library."""
         with service.lock:
             if NATIVE_ID.fullmatch(playlist_id):
-                return service.native.call("delete_playlist", id=playlist_id, dry_run=dry_run)
+                return service.call_native("delete_playlist", id=playlist_id, dry_run=dry_run)
             return service.api.delete_playlist(playlist_id, dry_run)
 
     @mcp.tool(annotations=WRITE)
@@ -284,7 +312,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         """
         with service.lock:
             if NATIVE_ID.fullmatch(playlist_id):
-                return service.native.call(
+                return service.call_native(
                     "add",
                     id=playlist_id,
                     track_ids=service.native_ids(song_ids),
@@ -304,7 +332,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         """
         with service.lock:
             if NATIVE_ID.fullmatch(playlist_id):
-                return service.native.call(
+                return service.call_native(
                     "remove",
                     id=playlist_id,
                     track_ids=service.native_ids(song_ids),
@@ -321,15 +349,15 @@ def create_server(service: MusicService | None = None) -> FastMCP:
             if not NATIVE_ID.fullmatch(playlist_id):
                 return service.api.copy_playlist(playlist_id, new_name)
             tracks = service.all_native_tracks(playlist_id)
-            before = service.native.call("playlist", id=playlist_id)
-            created = service.native.call(
+            before = service.call_native("playlist", id=playlist_id)
+            created = service.call_native(
                 "create", name=new_name, description=before["description"]
             )
             copied = 0
             try:
                 # Native add allows intentional duplicates for preserving the source contents.
                 for offset in range(0, len(tracks), 100):
-                    service.native.call(
+                    service.call_native(
                         "add",
                         id=created["id"],
                         track_ids=[i["id"] for i in tracks[offset : offset + 100]],
@@ -362,7 +390,7 @@ def create_server(service: MusicService | None = None) -> FastMCP:
             )
         ids = [service.native.validate_id(i) for i in ordered_song_ids]
         with service.lock:
-            return service.native.call(
+            return service.call_native(
                 "reorder",
                 id=playlist_id,
                 track_ids=ids,
@@ -394,6 +422,9 @@ def create_server(service: MusicService | None = None) -> FastMCP:
         if dry_run:
             return {"dry_run": True, "importing": resolved}
         with service.lock:
-            return service.native.call("import", paths=resolved)
+            return service.call_native("import", paths=resolved)
 
+    if not service.capabilities["native_backend_available"]:
+        for name in NATIVE_TOOLS:
+            mcp.local_provider.remove_tool(name)
     return mcp

@@ -77,8 +77,8 @@ def browser_login(
     except ImportError as exc:
         raise MusicError(
             "Web sign-in needs the optional browser helper. Install "
-            "`apple-music-mcp[browser]`; if Chrome is not installed, "
-            "also run `playwright install chromium`."
+            "`apple-music-mcp[browser]` and run `python -m playwright install chromium` "
+            "with the server's Python interpreter."
         ) from exc
 
     credentials.root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -106,7 +106,7 @@ def browser_login(
                         on_ready()
                     print(
                         "In the separate browser window, click Sign In and finish Apple's "
-                        "sign-in. Your password stays with Apple. Waiting for music access…",
+                        "sign-in. Your password stays with Apple. Waiting for music access...",
                         file=sys.stderr,
                         flush=True,
                     )
@@ -124,5 +124,5 @@ def browser_login(
         # Browser error text can contain account URLs; don't expose it in logs/chat.
         raise MusicError(
             "The sign-in browser could not open or was closed. Run login again. "
-            "If Chrome is unavailable, run `playwright install chromium` first."
+            "Run `python -m playwright install chromium` with the server's Python interpreter."
         ) from exc

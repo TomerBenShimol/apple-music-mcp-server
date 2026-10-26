@@ -1,10 +1,13 @@
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="macOS tunnel setup helper")
 
 
 @pytest.mark.parametrize("doctor_code", [0, 2])
