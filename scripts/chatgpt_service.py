@@ -26,6 +26,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
+
 LABEL = "local.apple-music-chatgpt"
 SERVICE = "Apple Music — OpenAI tunnel"
 ROOT = Path.home() / ".local/share/apple-music-mcp"
@@ -40,6 +42,7 @@ ITEM_NOT_FOUND = -25300
 PLIST = Path.home() / "Library/LaunchAgents" / (LABEL + ".plist")
 LOGS = Path.home() / ".local/state/apple-music-mcp"
 PORT = 61356
+POLL_FRESHNESS_SECONDS = 120
 DOMAIN = f"gui/{os.getuid()}"
 TARGET = f"{DOMAIN}/{LABEL}"
 
@@ -164,7 +167,7 @@ def read_settings():
     return settings, tunnel_id
 
 
-def arguments(action):
+def arguments(action, *, health_port=PORT):
     return [
         str(CLIENT),
         action,
@@ -176,7 +179,7 @@ def arguments(action):
         "--mcp.max-concurrent-requests",
         "1",
         "--health.listen-addr",
-        f"127.0.0.1:{PORT}",
+        f"127.0.0.1:{health_port}",
         "--log.http-raw-unsafe=false",
         "--allow-remote-ui=false",
     ]
@@ -199,8 +202,23 @@ def ready():
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(f"http://127.0.0.1:{PORT}/readyz", timeout=2) as response:
-            return response.status == 200
-    except (OSError, urllib.error.URLError):
+            if response.status != 200:
+                return False
+        # The vendor's readiness endpoint can return 200 while authentication
+        # fails on every poll. Require evidence of recent successful polling.
+        with opener.open(f"http://127.0.0.1:{PORT}/metrics", timeout=2) as response:
+            metrics = response.read(1_000_000).decode("utf-8")
+        match = re.search(
+            r"^commands_poll_last_successful_timestamp_seconds(?:\{[^\n]*\})?\s+"
+            r"([0-9.eE+-]+)\s*$",
+            metrics,
+            re.MULTILINE,
+        )
+        if not match:
+            return False
+        last_success = float(match[1])
+        return last_success > 0 and 0 <= time.time() - last_success <= POLL_FRESHNESS_SECONDS
+    except (OSError, urllib.error.URLError, ValueError):
         return False
 
 
@@ -280,12 +298,50 @@ def prompt_key():
 
 def check_key(key):
     subprocess.run(
-        arguments("doctor"),
+        # A running service already owns PORT during a key replacement.
+        arguments("doctor", health_port=0),
         env=environment(key),
         cwd=ROOT,
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+    )
+    verify_tunnel_key(key)
+
+
+def verify_tunnel_key(key):
+    """Validate real tunnel access before replacing a saved key or service."""
+    _, tunnel_id = read_settings()
+    try:
+        # Use the application's verified TLS trust bundle. Some macOS Python
+        # installations have no system CA file configured for stdlib HTTPS.
+        # Never follow redirects with the key or include response bodies in errors.
+        with httpx.Client(timeout=20, follow_redirects=False, trust_env=False) as client:
+            response = client.get(
+                f"https://api.openai.com/v1/tunnels/{tunnel_id}",
+                headers={"Authorization": "Bearer " + key},
+            )
+            status_code = response.status_code
+    except httpx.HTTPError as error:
+        raise RuntimeError(
+            "Could not verify tunnel access with OpenAI. Try again later."
+        ) from error
+    if status_code == 200:
+        return
+    if status_code == 401:
+        raise RuntimeError(
+            "OpenAI rejected this runtime key (HTTP 401). Copy the full secret key from "
+            "https://platform.openai.com/settings/organization/api-keys and retry. "
+            "A key name or tunnel ID is not an API key."
+        )
+    if status_code == 403:
+        raise RuntimeError(
+            "The runtime key cannot access this tunnel (HTTP 403). Check the organization "
+            "and Tunnels Read + Use permissions."
+        )
+    raise RuntimeError(
+        f"OpenAI could not verify tunnel access (HTTP {status_code}). "
+        "Check the tunnel and account, then retry."
     )
 
 
@@ -392,7 +448,11 @@ def run():
 
 def status():
     is_ready = ready()
-    print("Connected and ready." if is_ready else "Background connection is not ready.")
+    print(
+        "Connected and polling successfully."
+        if is_ready
+        else "Background connection has no recent successful poll. Check tunnel authentication."
+    )
     return 0 if is_ready else 1
 
 

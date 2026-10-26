@@ -48,6 +48,17 @@ The installer asks for the key privately, saves and verifies it in Keychain,
 loads the LaunchAgent, and waits for readiness. When it reports **Connected.
 Automatic startup is enabled**, Terminal may close. Keep your Mac awake and online.
 
+Copy the full secret from the organization's
+[runtime API keys page](https://platform.openai.com/settings/organization/api-keys),
+not the key's name or the tunnel ID. Setup checks access to the actual tunnel
+before replacing the saved key. It rejects invalid credentials without changing
+an existing connection.
+
+The status check requires a successful tunnel poll within the last two minutes.
+An HTTP 200 from the local readiness endpoint alone does not confirm that OpenAI
+accepted the key. Repeated HTTP 401 errors mean the runtime credential is rejected;
+HTTP 403 means its tunnel access needs checking.
+
 The helper recognizes the original deployment's foreground client under
 `~/Desktop/apple-music-mcp/.chatgpt/` and stops it after successful startup.
 If you launched the old client from a different path, close that foreground
